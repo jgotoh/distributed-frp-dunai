@@ -1,0 +1,3 @@
+:set -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates
+:set -isrc
+
