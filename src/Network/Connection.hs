@@ -1,5 +1,5 @@
 module Network.Connection where
 
-network :: [Char]
+network :: String
 network = "Network"
 

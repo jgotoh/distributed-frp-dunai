@@ -2,42 +2,56 @@ module Main where
 
 import Display
 import Network.Connection
+import Time
 
 import Control.Monad
+import Data.Functor.Identity
+import Data.IORef
+import FRP.BearRiver
 import qualified SDL
 
 main :: IO ()
 main = do
-  (window, renderer) <- initializeGame
+  (window, renderer) <- initializeSDL
+  timeRef <- createTimeRef
+
   SDL.showWindow window
-  putStrLn "hello world"
-  appLoop renderer
+  reactimate (return ()) (sense timeRef) (\_ e -> renderGameState renderer e >> qPressed) gameSF
+
   quit window renderer
 
-initializeGame :: IO (SDL.Window, SDL.Renderer)
-initializeGame = do
+initializeSDL :: IO (SDL.Window, SDL.Renderer)
+initializeSDL = do
   SDL.initializeAll
-
   window <- createWindow "simple-example" windowWidth windowHeight
   renderer <- createRenderer window
   return (window, renderer)
 
-appLoop :: SDL.Renderer -> IO ()
-appLoop renderer = do
-  events <- SDL.pollEvents
+sense ::IORef DTime -> Bool -> IO (DTime, Maybe ())
+sense timeRef _ = do
+  dtMillis <- senseTime timeRef
+  return (dtMillis, Just ())
 
-  let eventIsQPress event = case SDL.eventPayload event of
+gameSF :: MSF (ClockInfo Data.Functor.Identity.Identity) () ()
+gameSF = arr $ return ()
+
+eventIsQPress :: SDL.Event -> Bool
+eventIsQPress event' = case SDL.eventPayload event' of
         SDL.KeyboardEvent keyboardEvent ->
           SDL.keyboardEventKeyMotion keyboardEvent == SDL.Pressed &&
           SDL.keysymKeycode (SDL.keyboardEventKeysym keyboardEvent) == SDL.KeycodeQ
         _ -> False
 
-  let qPressed = any eventIsQPress events
+qPressed :: IO Bool
+qPressed = do
+  events <- SDL.pollEvents
+  return $ any eventIsQPress events
 
+renderGameState :: SDL.Renderer -> () -> IO ()
+renderGameState renderer _ = do
   SDL.rendererDrawColor renderer SDL.$= SDL.V4 100 149 237 255
   SDL.clear renderer
   SDL.present renderer
-  unless qPressed (appLoop renderer)
 
 quit :: SDL.Window -> SDL.Renderer -> IO ()
 quit window renderer
@@ -46,3 +60,4 @@ quit window renderer
     SDL.destroyRenderer renderer
     SDL.destroyWindow window
     SDL.quit
+
