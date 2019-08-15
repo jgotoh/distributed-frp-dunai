@@ -1,11 +1,9 @@
 module Main where
 
 import Display
-import Network.Connection
+import Game
 import Time
 
-import Control.Monad
-import Data.Functor.Identity
 import Data.IORef
 import FRP.BearRiver
 import qualified SDL
@@ -32,9 +30,6 @@ sense timeRef _ = do
   dtMillis <- senseTime timeRef
   return (dtMillis, Just ())
 
-gameSF :: MSF (ClockInfo Data.Functor.Identity.Identity) () ()
-gameSF = arr $ return ()
-
 eventIsQPress :: SDL.Event -> Bool
 eventIsQPress event' = case SDL.eventPayload event' of
         SDL.KeyboardEvent keyboardEvent ->
@@ -45,7 +40,7 @@ eventIsQPress event' = case SDL.eventPayload event' of
 qPressed :: IO Bool
 qPressed = do
   events <- SDL.pollEvents
-  return $ any eventIsQPress events
+  return $ Prelude.any eventIsQPress events
 
 renderGameState :: SDL.Renderer -> () -> IO ()
 renderGameState renderer _ = do
