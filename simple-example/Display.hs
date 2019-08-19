@@ -1,8 +1,11 @@
 module Display where
 
+import GameState
+
 import Data.Text
 import Foreign.C
 import qualified SDL
+import SDL.Primitive as SDL
 
 windowWidth :: CInt
 windowWidth = 800
@@ -29,8 +32,16 @@ createRenderer window = do
                                      , SDL.rendererTargetTexture = True }
   SDL.createRenderer window (-1) rdrConfig
 
---drawBackground :: SDL.Renderer -> IO ()
---drawBackground renderer = do
---  let color = Colors.convertRGB ColorNames.black
---  SDL.rendererDrawColor renderer $= color
---  SDL.clear renderer
+-- Rendering, TODO maybe use Reader SDL.Renderer
+
+drawBackground :: SDL.Renderer -> IO ()
+drawBackground renderer = do
+  SDL.rendererDrawColor renderer SDL.$= SDL.V4 100 149 237 255
+  SDL.clear renderer
+
+drawState :: SDL.Renderer -> GameState -> IO ()
+drawState renderer state = drawCircle renderer $ leftBallPosState state
+
+drawCircle :: SDL.Renderer -> Position -> IO ()
+drawCircle renderer = undefined
+

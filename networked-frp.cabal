@@ -26,7 +26,7 @@ library
 
 executable simple-example
   main-is:             Main.hs
-  other-modules:       Display, Game, Time
+  other-modules:       Display, Game, GameState, Input, Time
   -- other-extensions:
   build-depends:       base,
                        bearriver,

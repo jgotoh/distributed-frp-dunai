@@ -1,43 +1,33 @@
 module Game where
 
-import FRP.BearRiver
+import GameState
 
 import Control.Monad.Reader hiding (asks, ask)
 import Control.Monad.Trans.MSF.Reader
+import FRP.BearRiver
 
 
-type GameEnv = ReaderT GameSettings
 
-data GameSettings = GameSettings
-  { leftBallPos :: Position
-  , rightBallPos :: Position
-  , groundPosition :: Position
-  }
-
-
-type Ball = Double
-type Position = Double
-
-gameSF :: Monad m => SF m a ()
-gameSF = (constM ask) >>> arr (\dt -> (dt, ())) >>> flattenFallingBall >>> (arr $ return ())
+gameSF :: Monad m => SF m a GameState
+gameSF = (constM ask) >>> arr (\dt -> (dt, ())) >>> flattenFallingBall >>> (arr $ GameState)
 
 gravity :: Double
 gravity = -100
 
-fallingBall :: Monad m => SF (GameEnv m) () Ball
+fallingBall :: Monad m => SF (GameEnv m) () Position
 fallingBall = proc () -> do
   v <- integral -< gravity
   dp <- integral -< v
-  pos1 <- arrM(\d -> (d +) <$> (lift $ asks leftBallPos)) -< dp
+  pos1 <- arrM(\d -> (d +) <$> (lift $ asks leftBallPos0)) -< dp
   returnA -< pos1
 
 -- first flattens outer ClockInfo Reader with runReaderS, adds DTime to fallingBall's Arrow input
--- then runReaderS_ runs inner GameEnv Reader and passes in the GameSettings
+-- then runReaderS_ runs inner GameEnv Reader to pass in the GameSettings
 flattenFallingBall :: Monad m => MSF m (DTime, ()) Position
 flattenFallingBall = runReaderS_ (runReaderS fallingBall) gs
   where
     gs = GameSettings 100 500 50
 
-hitGround :: Monad m => SF (GameEnv m) Ball Bool
+hitGround :: Monad m => SF (GameEnv m) Position Bool
 hitGround = arrM $ \b -> (b <=) <$> (lift $ asks groundPosition)
 
