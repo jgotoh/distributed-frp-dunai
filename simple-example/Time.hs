@@ -15,6 +15,6 @@ senseTime timeRef = do
   previousTime <- readIORef timeRef
 
   writeIORef timeRef $ fromIntegral newTime
-  let dtMillis = (fromIntegral newTime - previousTime) * 1000 / fromIntegral freq
-  return dtMillis
+  let dtSecs = (fromIntegral newTime - previousTime) / fromIntegral freq
+  return dtSecs
 
