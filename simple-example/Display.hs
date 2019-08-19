@@ -34,15 +34,18 @@ createRenderer window = do
 
 drawBackground :: SDL.Renderer -> IO ()
 drawBackground renderer = do
-  SDL.rendererDrawColor renderer SDL.$= SDL.V4 100 149 237 255 -- #6495ed
+  SDL.rendererDrawColor renderer SDL.$= SDL.V4 100 149 237 255
   SDL.clear renderer
 
 drawState :: SDL.Renderer -> GameState -> IO ()
 drawState renderer state = drawCircle renderer $ leftBallPosState state
 
 drawCircle :: SDL.Renderer -> Position -> IO ()
-drawCircle renderer pos = SDL.smoothEllipse renderer (subtractWindowHeight (round <$> pos)) (round playerRadius) (round playerRadius) color
+drawCircle renderer pos = do
+  SDL.smoothEllipse renderer sdlpos (round playerRadius) (round playerRadius) color
+  SDL.fillEllipse renderer sdlpos (round playerRadius) (round playerRadius) color
     where
+      sdlpos = subtractWindowHeight (round <$> pos)
       color = SDL.V4 240 142 125 255
 
 subtractWindowHeight :: V2 CInt -> V2 CInt
