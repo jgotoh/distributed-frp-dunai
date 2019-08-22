@@ -2,9 +2,8 @@ module Game where
 
 import GameState
 
-import Control.Monad.Reader hiding (asks, ask)
+import Control.Monad.Reader (lift)
 import Control.Monad.Trans.MSF.Reader
-import Data.Functor.Identity
 import FRP.BearRiver hiding ((^+^))
 import SDL.Vect
 
@@ -36,16 +35,13 @@ edgeSF :: Monad m => SF m a Bool -> SF m a (Event a)
 edgeSF sf = (arr id &&& sf) >>> arr (\(x, bool) -> if bool then Event x else NoEvent)
 
 movingBall :: Monad m => Velocity -> SF (GameEnv (PlayerEnv m)) () Position
-movingBall v0 = switch ((liftTransSF $ fallingBall v0) >>> (arr id &&& edgeSF (hitGround))) bouncingBall
+movingBall v0 = switch ((liftTransSF $ fallingBall v0) >>> (arr id &&& edgeSF (hitGround))) liftMovingBallPS
 
-liftFallingSF :: Monad m => Velocity -> MSF (ClockInfo (GameEnv (PlayerEnv m))) () Position
-liftFallingSF v0 = liftTransSF $ fallingBall v0
-
--- flattens a ReaderT r1 to arrow input, gives rise to an outer Reader r2
+-- flattens a ReaderT r1 to arrow input and gives rise to an outer Reader r2
 liftInner :: Monad m => MSF (ReaderT r1 m) a b -> MSF (ReaderT r2 m) (r1, a) b
 liftInner sf = readerS $ addInput $ runReaderS sf
 
--- creates a ReaderT in an inner layer
+-- creates a ReaderT in an inner layer, lifts sf up in the Monad stack
 liftTransSF :: Monad m => MSF (ReaderT t1 m) a b -> MSF (ReaderT t1 (ReaderT t2 m)) a b
 liftTransSF sf = readerS $ liftInner sf
 
@@ -53,9 +49,15 @@ liftTransSF sf = readerS $ liftInner sf
 addInput :: Monad m => MSF m a b -> MSF m (c,a) b
 addInput sf = second sf >>> arr snd
 
-staticBall :: Monad m => Position -> SF (m) () Position
-staticBall p0 = constM $ return p0
+-- const position p0
+constBall :: Monad m => Position -> SF (m) () Position
+constBall p0 = constM $ return p0
 
-bouncingBall :: Monad m => Position -> SF (GameEnv (PlayerEnv m)) () Position
-bouncingBall _ = movingBall $ V2 0 200
+liftMovingBallPS :: Monad m => Position -> SF (GameEnv (PlayerEnv m)) () Position
+liftMovingBallPS p = readerS $ readerS $ movingBallPS p
+
+movingBallPS :: Monad m => Position -> MSF (PlayerEnv m) (GameSettings, (DTime, ())) Position
+movingBallPS p = runReaderS_ (runReaderS $ runReaderS $ movingBall $ V2 0 100) ps
+  where
+    ps = PlayerSettings p $ V2 200 200
 
