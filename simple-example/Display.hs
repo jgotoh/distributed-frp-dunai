@@ -9,13 +9,13 @@ import SDL.Vect
 import SDL.Primitive as SDL
 
 playerRadius :: Double
-playerRadius = 30
+playerRadius = 15
 
 windowWidth :: CInt
-windowWidth = 800
+windowWidth = 400
 
 windowHeight :: CInt
-windowHeight = 600
+windowHeight = 250
 
 createWindow :: String -> CInt -> CInt -> IO SDL.Window
 createWindow title width height = do
@@ -26,7 +26,7 @@ createWindow title width height = do
 
 createRenderer :: SDL.Window -> IO SDL.Renderer
 createRenderer window = do
-  let rdrConfig = SDL.RendererConfig { SDL.rendererType = SDL.AcceleratedVSyncRenderer
+  let rdrConfig = SDL.RendererConfig { SDL.rendererType = SDL.AcceleratedRenderer
                                      , SDL.rendererTargetTexture = True }
   SDL.createRenderer window (-1) rdrConfig
 

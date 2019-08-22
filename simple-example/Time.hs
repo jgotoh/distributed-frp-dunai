@@ -4,7 +4,6 @@ import Data.IORef
 import FRP.BearRiver
 import SDL.Raw.Timer as SDL
 
-
 createTimeRef :: IO (IORef DTime)
 createTimeRef = SDL.getPerformanceCounter >>= \pc -> newIORef $ fromIntegral pc
 

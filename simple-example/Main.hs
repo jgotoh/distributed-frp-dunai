@@ -47,10 +47,9 @@ qPressed = Prelude.any eventIsQPress <$> SDL.pollEvents
 
 renderGameState :: SDL.Renderer -> GameState -> IO ()
 renderGameState renderer state = do
-  print state
+  --print state
   drawBackground renderer
   drawState renderer state
-  drawCircle renderer $ SDL.V2 100 100
   SDL.present renderer
 
 quit :: SDL.Window -> SDL.Renderer -> IO ()
