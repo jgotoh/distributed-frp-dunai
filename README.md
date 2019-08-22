@@ -1,6 +1,8 @@
 # Distributed Systems Extensions for the Dunai FRP Library
 
-TODO
+## simple-example
+
+The example needs [SDL2](https://www.libsdl.org/download-2.0.php) and [SDL2-gfx](http://www.ferzkopp.net/wordpress/2016/01/02/sdl_gfx-sdl2_gfx/) installed on the system.
 
 ## hlint
 
