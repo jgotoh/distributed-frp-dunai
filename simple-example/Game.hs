@@ -26,9 +26,6 @@ movingBall = proc () -> do
   dp <- integral -< v1
   pos1 <- arrM(\dp -> (dp +) <$> lift (asks playerPosition0)) -< dp
   returnA -< pos1
-    where
-      add :: Double -> Velocity -> Velocity
-      add z v = case v of V2 x y -> V2 x $ y+z
 
 hitGround :: Monad m => SF (GameEnv m) Position Bool
 hitGround = arrM $ \b -> (yOfV2 b <=) <$> lift (asks groundHeightSettings)
@@ -41,31 +38,15 @@ edgeSF sf = (arr id &&& sf) >>> arr (\(x, bool) -> if bool then Event x else NoE
 
 -- A ball that bounces back up when it hit ground
 bouncingBall :: Monad m => SF (GameEnv (PlayerEnv m)) () Position
-bouncingBall = switch (liftTransSF movingBall >>> (arr id &&& edgeSF hitGround)) liftBouncingBallPS
+bouncingBall = switch (morphS (mapReaderT lift) movingBall >>> (arr id &&& edgeSF hitGround)) bounceAgain
 
--- Flattens a ReaderT r1 to arrow input and gives rise to an outer Reader r2
-liftInner :: Monad m => MSF (ReaderT r1 m) a b -> MSF (ReaderT r2 m) (r1, a) b
-liftInner sf = readerS $ addInput $ runReaderS sf
-
--- Creates a ReaderT in an inner layer, lifts sf up in the Monad stack
-liftTransSF :: Monad m => MSF (ReaderT t1 m) a b -> MSF (ReaderT t1 (ReaderT t2 m)) a b
-liftTransSF sf = readerS $ liftInner sf
-
--- Send an additional argument into an arrow
-addInput :: Monad m => MSF m a b -> MSF m (c,a) b
-addInput sf = second sf >>> arr snd
+-- Initialize bouncingBall at position p with another velocity
+bounceAgain :: Monad m => Position -> SF (GameEnv (PlayerEnv m)) () Position
+bounceAgain p = morphS (mapReaderT $ mapReaderT $ withReaderT ps) bouncingBall
+  where
+    ps _ = PlayerSettings p $ V2 0 200
 
 -- Const position p0
 constBall :: Monad m => Position -> SF m () Position
 constBall p0 = constM $ return p0
-
--- Lifts bouncingBallPS back to SF
-liftBouncingBallPS :: Monad m => Position -> SF (GameEnv (PlayerEnv m)) () Position
-liftBouncingBallPS p = readerS $ readerS $ bouncingBallPS p
-
--- Runs bouncingBall at a different initial position p
-bouncingBallPS :: Monad m => Position -> MSF (PlayerEnv m) (GameSettings, (DTime, ())) Position
-bouncingBallPS p = runReaderS_ (runReaderS $ runReaderS bouncingBall) ps
-  where
-    ps = PlayerSettings p $ V2 0 200
 
