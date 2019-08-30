@@ -16,7 +16,7 @@ main = do
   timeRef <- createTimeRef
 
   SDL.showWindow window
-  reactimate (return GameInput) (sense timeRef) (actuate renderer) gameSF
+  reactimate (return $ GameInput False) (sense timeRef) (actuate renderer) gameSF
 
   quit window renderer
 
@@ -28,12 +28,15 @@ initializeSDL = do
   return (window, renderer)
 
 actuate :: SDL.Renderer -> p -> GameState -> IO Bool
-actuate renderer _ state = renderGameState renderer state >> qPressed
+actuate renderer _ state = renderGameState renderer state >> return False --qPressed
 
 sense ::IORef DTime -> Bool -> IO (DTime, Maybe GameInput)
 sense timeRef _ = do
   dtSecs <- senseTime timeRef
-  return (dtSecs, Just GameInput)
+  events <- SDL.pollEvents
+  return (dtSecs, Just $ GameInput $ isJump events)
+  where
+    isJump = Prelude.any (keyPressed SDL.KeycodeSpace)
 
 eventIsQPress :: SDL.Event -> Bool
 eventIsQPress event' = case SDL.eventPayload event' of
@@ -47,7 +50,6 @@ qPressed = Prelude.any eventIsQPress <$> SDL.pollEvents
 
 renderGameState :: SDL.Renderer -> GameState -> IO ()
 renderGameState renderer state = do
-  --print state
   drawBackground renderer
   drawState renderer state
   SDL.present renderer
