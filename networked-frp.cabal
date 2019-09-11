@@ -20,20 +20,28 @@ library
   -- other-modules:
   -- other-extensions:
   build-depends:       base,
-                       dunai
+                       bytestring,
+                       dunai,
+                       network >= 3.0
   hs-source-dirs:      src
   default-language:    Haskell2010
 
 executable simple-example
   main-is:             Main.hs
-  other-modules:       Display, Game, GameState, Input, Time
+  other-modules:       Config, Display, Game, GameState, Input, Time
+  --ghc-options:         
+  --                     -fprof-auto
+  --                     "-with-rtsopts=-p -s -hd"
   -- other-extensions:
   build-depends:       base,
                        bearriver,
+                       bytestring,
                        dunai,
                        monadIO,
                        mtl,
+                       network,
                        networked-frp,
+                       optparse-applicative,
                        sdl2,
                        sdl2-gfx,
                        text,

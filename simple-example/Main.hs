@@ -1,9 +1,11 @@
 module Main where
 
+import Config
 import Display
 import Game
 import GameState
 import Input
+import Network.Connection
 import Time
 
 import Data.IORef
@@ -12,6 +14,14 @@ import qualified SDL
 
 main :: IO ()
 main = do
+  cfg <- parseConfig
+
+  print cfg
+
+  if createSessionConfig cfg then createSession (show $ portConfig cfg) else joinSession (ipConfig cfg) (show $ portConfig cfg)
+
+main' :: IO ()
+main' = do
   (window, renderer) <- initializeSDL
   timeRef <- createTimeRef
 
