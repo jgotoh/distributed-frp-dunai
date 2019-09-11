@@ -6,13 +6,13 @@ import Control.Monad (forever)
 import Network.Socket
 import Network.Socket.ByteString
 
-createSession :: ServiceName -> IO ()
-createSession port =
+createSession :: HostName -> ServiceName -> IO ()
+createSession ip port =
   withSocketsDo $ do
     print ("Creating a session" :: String )
 
     -- create local UDP socket
-    addrA <- resolveAddress Nothing port Datagram
+    addrA <- resolveAddress (Just ip) port Datagram
     sockA <- createSocket addrA
     bind sockA (addrAddress addrA)
 

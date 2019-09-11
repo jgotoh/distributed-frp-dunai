@@ -18,7 +18,7 @@ main = do
 
   print cfg
 
-  if createSessionConfig cfg then createSession (show $ portConfig cfg) else joinSession (ipConfig cfg) (show $ portConfig cfg)
+  if createSessionConfig cfg then createSession (ipConfig cfg) (show $ portConfig cfg) else joinSession (ipConfig cfg) (show $ portConfig cfg)
 
 main' :: IO ()
 main' = do
