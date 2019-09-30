@@ -11,8 +11,8 @@ import qualified Network.Socket as N
 import qualified Network.Transport.TCP as NT
 import qualified Network.Transport as T
 
-launchClient :: N.HostName -> N.ServiceName -> String -> String -> IO ()
-launchClient ip port server name = do
+launchClient :: N.HostName -> N.ServiceName -> String -> String -> String -> IO ()
+launchClient ip port nick server name = do
   transport <- NT.createTransport (NT.defaultTCPAddr ip port) NT.defaultTCPParameters
   case transport of
     Left failure -> print $ show failure
@@ -34,10 +34,21 @@ launchClient ip port server name = do
         case maybePid of
           Just serverPid -> do
             P.link serverPid
-            callPingLoop serverPid
+            joinResult <- sendJoinMessage serverPid nick
+            case joinResult of
+              JoinMessageResult e -> case e of
+                Left err -> P.liftIO $ print err
+                Right _ -> do
+                  P.liftIO $ print "successful join"
+                  callPingLoop serverPid
             return ()
           Nothing -> return ()
   return ()
+
+sendJoinMessage :: P.ProcessId -> Nickname -> P.Process JoinMessageResult
+sendJoinMessage pid nick = do
+  P.liftIO $ print "send join message"
+  MP.call pid (JoinMessage nick) :: P.Process JoinMessageResult
 
 castPingLoop :: P.ProcessId -> P.Process ()
 castPingLoop pid = do

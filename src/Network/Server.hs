@@ -39,6 +39,7 @@ serverProcessDef :: MP.ProcessDefinition ()
 serverProcessDef = MP.statelessProcess {
                     MP.apiHandlers = [
                         MP.handleCall_ callPong
+                        , MP.handleCall_ callJoinMessage
                         , MP.handleCast castPong
                                   ]
                     , MP.infoHandlers = [
@@ -49,8 +50,13 @@ serverProcessDef = MP.statelessProcess {
                                         ]
                     , MP.timeoutHandler = logTimeout
                     , MP.shutdownHandler = logShutdown
-                    , MP.unhandledMessagePolicy = MP.Log
+                    , MP.unhandledMessagePolicy = MP.Terminate
                     }
+
+callJoinMessage :: JoinMessage -> P.Process JoinMessageResult
+callJoinMessage msg = do
+  P.liftIO $ print $ "JoinMessage: " ++ (show msg)
+  return $ JoinMessageResult $ Right JoinAccepted
 
 callPong :: Message -> P.Process Message
 callPong x = do

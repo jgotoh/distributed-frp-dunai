@@ -18,6 +18,24 @@ data UnhandledMessage = Peng
   deriving (Generic, Show, Typeable)
 instance Binary UnhandledMessage
 
+type Nickname = String
+
+newtype JoinMessage = JoinMessage Nickname
+  deriving (Generic, Show, Typeable)
+instance Binary JoinMessage
+
+newtype JoinMessageResult = JoinMessageResult (Either JoinError JoinAccepted)
+  deriving (Generic, Show, Typeable)
+instance Binary JoinMessageResult
+
+data JoinError = JoinError String
+  deriving (Generic, Show, Typeable)
+instance Binary JoinError
+
+data JoinAccepted = JoinAccepted
+  deriving (Generic, Show, Typeable)
+instance Binary JoinAccepted
+
 -- Searches for a Process under address addr called name. When timeLeft runs out, returns Nothing
 searchProcessTimeout :: String -> P.NodeId -> Int -> P.Process (Maybe P.ProcessId)
 searchProcessTimeout name addr timeLeft

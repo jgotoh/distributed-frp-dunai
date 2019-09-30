@@ -20,7 +20,7 @@ main = do
   print cfg
 
   case cfg of
-    ClientConfig ip port name server -> launchClient ip (show port) server name
+    ClientConfig ip port nick name server -> launchClient ip (show port) nick server name
     ServerConfig ip port name -> launchServer ip (show port) name
     GameConfig -> main'
 

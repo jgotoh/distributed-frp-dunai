@@ -5,6 +5,7 @@ import Data.Semigroup ((<>))
 
 data Config = ClientConfig { ipConfig :: String
   , portConfig :: Int
+  , nickConfig :: String
   , nameConfig :: String
   , serverAddrConfig :: String }
   | ServerConfig { ipConfig :: String
@@ -23,6 +24,10 @@ clientConfigParser = ClientConfig
   (long "p"
    <> help "Port of client"
    <> metavar "PORT")
+  <*> strOption
+  (long "nick"
+   <> help "Nickname of Client"
+   <> metavar "NICK")
   <*> strOption
   (long "name"
    <> help "Name of server session to join"
