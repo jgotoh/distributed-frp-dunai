@@ -5,7 +5,8 @@ import Display
 import Game
 import GameState
 import Input
-import Network.Connection
+import Network.Client
+import Network.Server
 import Time
 
 import Data.IORef
@@ -22,7 +23,6 @@ main = do
     ClientConfig ip port name server -> launchClient ip (show port) server name
     ServerConfig ip port name -> launchServer ip (show port) name
     GameConfig -> main'
-
 
 main' :: IO ()
 main' = do
