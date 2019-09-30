@@ -34,3 +34,11 @@ https://github.com/ndmitchell/ghcid
 ## Profiling
 
 To visualize the profiling report, run `hp2ps -e8in -c simple-example.hp`
+
+## network-transport-tcp
+
+The library uses a modified version of the package `network-transport-tcp`. The modified version updated the `network` dependency to version 3 and removed the upper bounds of the `async` package to support newer versions of GHC.
+
+However removing the upper bounds of `async` lead to a failed test (TestTCP.hs:testUnnecessaryConnect), so extra care should be taken to not reconnect to a socket already connected to.
+
+

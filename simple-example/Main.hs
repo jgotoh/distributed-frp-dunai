@@ -18,7 +18,11 @@ main = do
 
   print cfg
 
-  if createSessionConfig cfg then createSession (ipConfig cfg) (show $ portConfig cfg) else joinSession (ipConfig cfg) (show $ portConfig cfg)
+  case cfg of
+    ClientConfig ip port name server -> launchClient ip (show port) server name
+    ServerConfig ip port name -> launchServer ip (show port) name
+    GameConfig -> main'
+
 
 main' :: IO ()
 main' = do
@@ -37,9 +41,11 @@ initializeSDL = do
   renderer <- createRenderer window
   return (window, renderer)
 
+-- TODO send message
 actuate :: SDL.Renderer -> p -> GameState -> IO Bool
 actuate renderer _ state = renderGameState renderer state >> return False --qPressed
 
+-- TODO receive message
 sense ::IORef DTime -> Bool -> IO (DTime, Maybe GameInput)
 sense timeRef _ = do
   dtSecs <- senseTime timeRef

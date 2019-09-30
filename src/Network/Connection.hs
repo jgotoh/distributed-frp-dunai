@@ -1,63 +1,168 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 module Network.Connection where
 
-import Control.Monad (forever)
-import Network.Socket
-import Network.Socket.ByteString
+import Control.Concurrent
+import qualified Control.Distributed.Process as P
+import qualified Control.Distributed.Process.Extras.SystemLog as Log
+import qualified Control.Distributed.Process.Extras.Time as Time
+import qualified Control.Distributed.Process.Extras.Timer as Timer
+import Control.Distributed.Process.Extras.Internal.Types
+import qualified Control.Distributed.Process.ManagedProcess as MP
+import qualified Control.Distributed.Process.Node as Node
+import Control.Monad
+import Data.Binary
+import Data.ByteString.Char8
+import Data.Either
+import Debug.Trace
+import qualified Network.Socket as N
+import qualified Network.Transport.TCP as NT
+import qualified Network.Transport as T
+import Type.Reflection
+import GHC.Generics (Generic)
 
-createSession :: HostName -> ServiceName -> IO ()
-createSession ip port =
-  withSocketsDo $ do
-    print ("Creating a session" :: String )
 
-    -- create local UDP socket
-    addrA <- resolveAddress (Just ip) port Datagram
-    sockA <- createSocket addrA
-    bind sockA (addrAddress addrA)
+data Message = Ping | Pong
+  deriving (Generic, Show, Typeable)
+instance Binary Message
 
-    print $ show addrA
-    print ("Waiting for remote to connect" :: String )
+data UnhandledMessage = Peng
+  deriving (Generic, Show, Typeable)
+instance Binary UnhandledMessage
 
-    _ <- forever $ do
-      (msg, remote) <- recvFrom sockA 1024
-      _ <- sendTo sockA "hello from master" remote
-      print msg
-      print remote
-    return ()
+launchServer :: N.HostName -> N.ServiceName -> String -> IO ()
+launchServer ip port name = do
+  Right transport <- NT.createTransport (NT.defaultTCPAddr ip port) NT.defaultTCPParameters
+  node <- createLocalNode transport
+  Node.runProcess node $ do
 
-joinSession :: HostName -> ServiceName -> IO ()
-joinSession ip port =
-  withSocketsDo $ do
-    print ("Joining a session" :: String )
+    _ <- Log.systemLog (P.liftIO . print) (return ()) Log.Debug return
 
-    -- create remote host UDP socket
-    addrA <- resolveAddress (Just ip) port Datagram
-    sockA <- createSocket addrA
+    let serverAddress = P.nodeAddress $ Node.localNodeId node :: T.EndPointAddress
+    pid <- P.spawnLocal pongServerProcess
 
-    print $ show addrA
-    print ("Sending message to remote host" :: String )
+    P.link pid
 
-    _ <- forever $ do
-      _ <- sendTo sockA "hello from remote" $ addrAddress addrA
-      (msg, remote) <- recvFrom sockA 1024
-      print msg
-      print remote
-    return ()
+    P.liftIO $ print $ "Server starts at: " ++ (show $ serverAddress) ++ " ProcessId: " ++ (show pid)
+    P.register name pid
+    P.liftIO $ forever $ threadDelay 16
+  return ()
 
-resolveAddress :: Maybe HostName -> ServiceName -> SocketType -> IO AddrInfo
-resolveAddress ip port socketType = do
-    let hints = defaultHints {
-           addrFamily = AF_INET,
-           addrSocketType = socketType
-          }
+pongServerProcess :: P.Process ()
+pongServerProcess = MP.serve () (MP.statelessInit Time.NoDelay) serverProcessDef
 
-    addr:_ <- getAddrInfo (Just hints) ip (Just port)
-    return addr
+serverProcessDef :: MP.ProcessDefinition ()
+serverProcessDef = MP.statelessProcess {
+                    MP.apiHandlers = [
+                        MP.handleCall_ callPong
+                        , MP.handleCast castPong
+                                  ]
+                    , MP.infoHandlers = [
+                        MP.handleInfo logInfo
+                                      ]
+                    , MP.exitHandlers = [
+                        MP.handleExit logExit
+                                        ]
+                    , MP.timeoutHandler = logTimeout
+                    , MP.shutdownHandler = logShutdown
+                    , MP.unhandledMessagePolicy = MP.Log
+                    }
 
-createSocket :: AddrInfo -> IO Socket
-createSocket addr = do
-    sock <- socket (addrFamily addr) (addrSocketType addr) (addrProtocol addr)
-    withFdSocket sock setCloseOnExecIfNeeded -- automatically close after execution
-    return sock
+callPong :: Message -> P.Process Message
+callPong x = do
+  P.liftIO $ print $ "server: " ++ (show x)
+  return Pong
+
+castPong :: s -> Message -> MP.Action s
+castPong s x = do
+  P.liftIO $ print $ "server: " ++ (show x)
+  MP.continue s
+
+logInfo :: s -> Message -> MP.Action s
+logInfo s msg = do
+  P.liftIO $ print $ "logInfo: msg: " ++ (show msg)
+  MP.continue s
+
+logExit :: P.ProcessId -> s -> Message -> MP.Action s
+logExit pid s msg = do
+  P.liftIO $ print $ "logExit: " ++ (show pid) ++ " msg: " ++ (show msg)
+  MP.continue s
+
+logTimeout :: s -> Time.Delay -> MP.Action s
+logTimeout s delay = do
+  when (delay /= Time.NoDelay) $ P.liftIO $ print $ "logTimeout: " ++ (show delay)
+  MP.continue s
+
+logShutdown :: MP.ExitState s -> ExitReason -> P.Process ()
+logShutdown s reason =
+  P.liftIO $ print $ "logShutdown: " ++ (show reason)
+
+-- Searches for a Process under address addr called name. When timeLeft runs out, returns Nothing
+searchProcessTimeout :: String -> P.NodeId -> Int -> P.Process (Maybe P.ProcessId)
+searchProcessTimeout name addr timeLeft
+  | timeLeft <= 0 = do
+      P.liftIO $ print $ "searchProcess ended due to timeout. No process " ++ name ++ " at address "
+        ++ (show addr) ++ " could be found"
+      return Nothing
+  | otherwise = do
+      P.whereisRemoteAsync addr name
+      reply <- P.expectTimeout timeout
+      case reply of
+        Just (P.WhereIsReply name' maybeID) -> case maybeID of
+          Just pid -> do
+            P.liftIO $ print $ "WhereIsReply " ++ name' ++ " pid: " ++ (show pid)
+            return $ Just pid
+          Nothing -> searchProcessTimeout name addr (timeLeft - timeoutMS)
+        Nothing -> searchProcessTimeout name addr (timeLeft - timeoutMS)
+  where
+    timeoutMS = 1000
+    timeout = Time.asTimeout $ Time.milliSeconds timeoutMS
+
+launchClient :: N.HostName -> N.ServiceName -> String -> String -> IO ()
+launchClient ip port server name = do
+  let serverAddr = T.EndPointAddress $ pack server
+  transport <- NT.createTransport (NT.defaultTCPAddr ip port) NT.defaultTCPParameters
+  case transport of
+    Left failure -> print $ show failure
+    Right success -> do
+      print "successfully connected to client socket"
+
+      node <- createLocalNode success
+      Node.runProcess node $ do
+
+        let clientAddress = P.nodeAddress $ Node.localNodeId node :: T.EndPointAddress
+        P.liftIO $ print $ "Client starts at: " ++ (show $ clientAddress)
+
+        let serverEndpoint = T.EndPointAddress $ pack server
+            serverNode = P.NodeId serverEndpoint
+
+        P.liftIO $ print $ "searching server process " ++ name ++ " - " ++ (show serverNode)
+        maybePid <- searchProcessTimeout name serverNode 1000
+
+        case maybePid of
+          Just serverPid -> do
+            P.link serverPid
+            callPingLoop serverPid
+            return ()
+          Nothing -> return ()
+  return ()
+
+castPingLoop :: P.ProcessId -> P.Process ()
+castPingLoop pid = do
+  P.liftIO $ print "cast Ping"
+  MP.cast pid Ping
+  Timer.sleepFor 500 Time.Millis
+  castPingLoop pid
+
+callPingLoop :: P.ProcessId -> P.Process ()
+callPingLoop pid = do
+  P.liftIO $ print "call Ping"
+  pong <- MP.call pid Ping :: P.Process Message
+  P.liftIO $ print $ "received: " ++ (show pong)
+  Timer.sleepFor 500 Time.Millis
+  callPingLoop pid
+
+createLocalNode :: T.Transport -> IO Node.LocalNode
+createLocalNode transport = do
+  Node.newLocalNode transport Node.initRemoteTable
 

@@ -1,0 +1,6 @@
+packages: .
+
+source-repository-package
+    type: git
+    location: https://github.com/boggledekoog/network-transport-tcp.git
+    tag: d4b3d2e1cad56b815f8a00b1e53f6589fa4dab74
