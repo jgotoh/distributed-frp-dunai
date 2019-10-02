@@ -28,7 +28,7 @@ newtype JoinRequestResult = JoinRequestResult (Either JoinError JoinAccepted)
   deriving (Generic, Show, Typeable)
 instance Binary JoinRequestResult
 
-data JoinError = JoinError String
+newtype JoinError = JoinError String
   deriving (Generic, Show, Typeable)
 instance Binary JoinError
 
@@ -36,7 +36,7 @@ data JoinAccepted = JoinAccepted
   deriving (Generic, Show, Typeable)
 instance Binary JoinAccepted
 
-data StateUpdate a = StateUpdate a
+newtype StateUpdate a = StateUpdate a
   deriving (Generic, Show, Typeable)
 instance Binary a => Binary (StateUpdate a)
 
@@ -45,7 +45,7 @@ searchProcessTimeout :: String -> P.NodeId -> Int -> P.Process (Maybe P.ProcessI
 searchProcessTimeout name addr timeLeft
   | timeLeft <= 0 = do
       P.liftIO $ print $ "searchProcess ended due to timeout. No process " ++ name ++ " at address "
-        ++ (show addr) ++ " could be found"
+        ++ show addr ++ " could be found"
       return Nothing
   | otherwise = do
       P.whereisRemoteAsync addr name
@@ -53,7 +53,7 @@ searchProcessTimeout name addr timeLeft
       case reply of
         Just (P.WhereIsReply name' maybeID) -> case maybeID of
           Just pid -> do
-            P.liftIO $ print $ "WhereIsReply " ++ name' ++ " pid: " ++ (show pid)
+            P.liftIO $ print $ "WhereIsReply " ++ name' ++ " pid: " ++ show pid
             return $ Just pid
           Nothing -> searchProcessTimeout name addr (timeLeft - timeoutMS)
         Nothing -> searchProcessTimeout name addr (timeLeft - timeoutMS)
@@ -62,6 +62,6 @@ searchProcessTimeout name addr timeLeft
     timeout = Time.asTimeout $ Time.milliSeconds timeoutMS
 
 createLocalNode :: T.Transport -> IO Node.LocalNode
-createLocalNode transport = do
+createLocalNode transport =
   Node.newLocalNode transport Node.initRemoteTable
 

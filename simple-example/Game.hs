@@ -7,7 +7,7 @@ import Input
 
 import Control.Monad.Reader (lift)
 import Control.Monad.Trans.MSF.Reader
-import FRP.BearRiver hiding ((^+^))
+import FRP.BearRiver
 import SDL.Vect hiding (identity)
 
 gameSF'' :: Monad m => SF m a GameState
