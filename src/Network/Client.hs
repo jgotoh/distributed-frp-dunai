@@ -34,9 +34,10 @@ launchClient ip port nick server name = do
         case maybePid of
           Just serverPid -> do
             P.link serverPid
-            joinResult <- sendJoinMessage serverPid nick
+            (sp, rp) <- P.newChan --TODO use rp to receive stateupdates
+            joinResult <- sendJoinRequest serverPid nick sp
             case joinResult of
-              JoinMessageResult e -> case e of
+              JoinRequestResult e -> case e of
                 Left err -> P.liftIO $ print err
                 Right _ -> do
                   P.liftIO $ print "successful join"
@@ -45,10 +46,13 @@ launchClient ip port nick server name = do
           Nothing -> return ()
   return ()
 
-sendJoinMessage :: P.ProcessId -> Nickname -> P.Process JoinMessageResult
-sendJoinMessage pid nick = do
-  P.liftIO $ print "send join message"
-  MP.call pid (JoinMessage nick) :: P.Process JoinMessageResult
+-- send a JoinRequest that contains the client's nickname and the SendPort to receive simulation state updates
+sendJoinRequest :: P.ProcessId -> Nickname -> P.SendPort (StateUpdate Message) -> P.Process JoinRequestResult
+sendJoinRequest pid nick port = do
+  P.liftIO $ print $ "send joinRequest: " ++ (show request)
+  MP.call pid request :: P.Process JoinRequestResult
+  where
+    request = JoinRequest nick port
 
 castPingLoop :: P.ProcessId -> P.Process ()
 castPingLoop pid = do

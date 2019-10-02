@@ -20,13 +20,13 @@ instance Binary UnhandledMessage
 
 type Nickname = String
 
-newtype JoinMessage = JoinMessage Nickname
+data JoinRequest = JoinRequest Nickname (P.SendPort (StateUpdate Message))
   deriving (Generic, Show, Typeable)
-instance Binary JoinMessage
+instance Binary JoinRequest
 
-newtype JoinMessageResult = JoinMessageResult (Either JoinError JoinAccepted)
+newtype JoinRequestResult = JoinRequestResult (Either JoinError JoinAccepted)
   deriving (Generic, Show, Typeable)
-instance Binary JoinMessageResult
+instance Binary JoinRequestResult
 
 data JoinError = JoinError String
   deriving (Generic, Show, Typeable)
@@ -35,6 +35,10 @@ instance Binary JoinError
 data JoinAccepted = JoinAccepted
   deriving (Generic, Show, Typeable)
 instance Binary JoinAccepted
+
+data StateUpdate a = StateUpdate a
+  deriving (Generic, Show, Typeable)
+instance Binary a => Binary (StateUpdate a)
 
 -- Searches for a Process under address addr called name. When timeLeft runs out, returns Nothing
 searchProcessTimeout :: String -> P.NodeId -> Int -> P.Process (Maybe P.ProcessId)

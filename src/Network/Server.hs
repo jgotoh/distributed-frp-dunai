@@ -14,6 +14,9 @@ import qualified Network.Socket as N
 import qualified Network.Transport.TCP as NT
 import qualified Network.Transport as T
 
+type Client = (String, T.EndPoint)
+type ServerState = [Client]
+
 launchServer :: N.HostName -> N.ServiceName -> String -> IO ()
 launchServer ip port name = do
   Right transport <- NT.createTransport (NT.defaultTCPAddr ip port) NT.defaultTCPParameters
@@ -39,7 +42,7 @@ serverProcessDef :: MP.ProcessDefinition ()
 serverProcessDef = MP.statelessProcess {
                     MP.apiHandlers = [
                         MP.handleCall_ callPong
-                        , MP.handleCall_ callJoinMessage
+                        , MP.handleCall_ callJoinRequest
                         , MP.handleCast castPong
                                   ]
                     , MP.infoHandlers = [
@@ -53,10 +56,10 @@ serverProcessDef = MP.statelessProcess {
                     , MP.unhandledMessagePolicy = MP.Terminate
                     }
 
-callJoinMessage :: JoinMessage -> P.Process JoinMessageResult
-callJoinMessage msg = do
-  P.liftIO $ print $ "JoinMessage: " ++ (show msg)
-  return $ JoinMessageResult $ Right JoinAccepted
+callJoinRequest :: JoinRequest -> P.Process JoinRequestResult
+callJoinRequest msg = do
+  P.liftIO $ print $ "JoinRequest: " ++ (show msg)
+  return $ JoinRequestResult $ Right JoinAccepted
 
 callPong :: Message -> P.Process Message
 callPong x = do
