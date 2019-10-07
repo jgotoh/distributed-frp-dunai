@@ -12,9 +12,14 @@ import Time
 import Data.IORef
 import FRP.BearRiver
 import qualified SDL
+import System.IO
 
 main :: IO ()
 main = do
+  -- flush output on every newline to support prefixing output by sed
+  hSetBuffering stdin LineBuffering
+  hSetBuffering stdout LineBuffering
+
   cfg <- parseConfig
 
   print cfg

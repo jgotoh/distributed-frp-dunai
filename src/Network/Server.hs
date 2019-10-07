@@ -24,9 +24,16 @@ data Client = Client Nickname (P.SendPort (StateUpdate Message))
 
 type ServerState = [Client]
 
+nameClient :: Client -> Nickname
+nameClient (Client nick _) = nick
+
+portClient :: Client -> (P.SendPort (StateUpdate Message))
+portClient (Client _ port) = port
+
 launchServer :: N.HostName -> N.ServiceName -> String -> IO ()
 launchServer ip port name = do
   Right transport <- NT.createTransport (NT.defaultTCPAddr ip port) NT.defaultTCPParameters
+  -- TODO print error, also return Either from launchServer
   node <- createLocalNode transport
   Node.runProcess node $ do
 
@@ -68,14 +75,15 @@ pongProcessDef = MP.defaultProcess {
 
 
 -- TODO if decline if client with nickname already exists
-handleJoinRequest :: MP.CallHandler ServerState JoinRequest JoinRequestResult
+handleJoinRequest :: MP.CallHandler ServerState JoinRequest (JoinRequestResult [Nickname])
 handleJoinRequest s (JoinRequest nick port) = do
   P.liftIO $ print $ "JoinRequest:: " ++ show s'
   _ <- P.monitorPort port
-  MP.reply (JoinRequestResult $ Right JoinAccepted) s'
+  MP.reply (JoinRequestResult $ Right (JoinAccepted clients) ) s'
   where
     client = Client nick port
     s' = client:s
+    clients = map nameClient s
 
 callPong :: Message -> P.Process Message
 callPong x = do

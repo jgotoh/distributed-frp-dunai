@@ -24,21 +24,22 @@ data JoinRequest = JoinRequest Nickname (P.SendPort (StateUpdate Message))
   deriving (Generic, Show, Typeable)
 instance Binary JoinRequest
 
-newtype JoinRequestResult = JoinRequestResult (Either JoinError JoinAccepted)
+newtype JoinRequestResult a = JoinRequestResult (Either JoinError (JoinAccepted a))
   deriving (Generic, Show, Typeable)
-instance Binary JoinRequestResult
+instance Binary a => Binary (JoinRequestResult a)
 
 newtype JoinError = JoinError String
   deriving (Generic, Show, Typeable)
 instance Binary JoinError
 
-data JoinAccepted = JoinAccepted
+newtype JoinAccepted a = JoinAccepted a
   deriving (Generic, Show, Typeable)
-instance Binary JoinAccepted
+instance Binary a => Binary (JoinAccepted a)
 
 newtype StateUpdate a = StateUpdate a
   deriving (Generic, Show, Typeable)
 instance Binary a => Binary (StateUpdate a)
+
 
 -- Searches for a Process under address addr called name. When timeLeft runs out, returns Nothing
 searchProcessTimeout :: String -> P.NodeId -> Int -> P.Process (Maybe P.ProcessId)

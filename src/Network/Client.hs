@@ -39,18 +39,20 @@ launchClient ip port nick server name = do
             case joinResult of
               JoinRequestResult e -> case e of
                 Left err -> P.liftIO $ print err
-                Right _ -> do
-                  P.liftIO $ print "successful join"
-                  chanPingLoop serverPid rp
+                Right acc -> do
+                  P.liftIO $ print $ "join successful: " ++ show acc
+                  chanPingLoop serverPid rp (msg acc)
             return ()
           Nothing -> return ()
   return ()
+  where
+    msg (JoinAccepted nicks) = if Prelude.null nicks then Ping else Pong
 
 -- send a JoinRequest that contains the client's nickname and the SendPort to receive simulation state updates
-sendJoinRequest :: P.ProcessId -> Nickname -> P.SendPort (StateUpdate Message) -> P.Process JoinRequestResult
+sendJoinRequest :: P.ProcessId -> Nickname -> P.SendPort (StateUpdate Message) -> P.Process (JoinRequestResult [Nickname])
 sendJoinRequest pid nick port = do
   P.liftIO $ print $ "send joinRequest: " ++ show request
-  MP.call pid request :: P.Process JoinRequestResult
+  MP.call pid request :: P.Process (JoinRequestResult [Nickname])
   where
     request = JoinRequest nick port
 
@@ -69,13 +71,13 @@ callPingLoop pid = do
   Timer.sleepFor 500 Time.Millis
   callPingLoop pid
 
-chanPingLoop :: P.ProcessId -> P.ReceivePort (StateUpdate Message) -> P.Process ()
-chanPingLoop pid rp = do
-  sendStateUpdate pid $ StateUpdate Pong
+chanPingLoop :: P.ProcessId -> P.ReceivePort (StateUpdate Message) -> Message -> P.Process ()
+chanPingLoop pid rp msg0 = do
+  sendStateUpdate pid $ StateUpdate msg0
   msg <- P.receiveChan rp
   P.liftIO $ print $ "received: " ++ show msg
   Timer.sleepFor 500 Time.Millis
-  chanPingLoop pid rp
+  chanPingLoop pid rp msg0
 
 sendStateUpdate :: P.ProcessId -> StateUpdate Message -> P.Process ()
 sendStateUpdate pid msg = do
