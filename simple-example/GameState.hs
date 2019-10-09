@@ -3,9 +3,9 @@
 
 module GameState where
 
-import Control.Monad.Reader
-import SDL.Vect
-import FRP.BearRiver
+import           Control.Monad.Reader
+import           SDL.Vect
+import           FRP.BearRiver
 
 type GameEnv = ReaderT GameSettings
 type Position = V2 Double
@@ -28,18 +28,18 @@ data GameState = GameState
 
 -- TODO orphaninstance
 instance RealFloat a => VectorSpace (V2 a) a where
-    zeroVector = zero
+  zeroVector = zero
 
-    a *^ v = a SDL.Vect.*^ v
+  a *^ v = a SDL.Vect.*^ v
 
-    v ^/ a = v SDL.Vect.^/ a
+  v ^/ a = v SDL.Vect.^/ a
 
-    negateVector = SDL.Vect.negated
+  negateVector = SDL.Vect.negated
 
-    v1 ^+^ v2 = v1 SDL.Vect.^+^ v2
+  v1 ^+^ v2 = v1 SDL.Vect.^+^ v2
 
-    v1 ^-^ v2 = v1 SDL.Vect.^-^ v2
+  v1 ^-^ v2 = v1 SDL.Vect.^-^ v2
 
-    v1 `dot` v2 = SDL.Vect.dot v1 v2
+  v1 `dot` v2 = SDL.Vect.dot v1 v2
 
 

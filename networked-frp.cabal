@@ -16,7 +16,8 @@ extra-source-files:  ChangeLog.md
 cabal-version:       >=1.10
 
 library
-  exposed-modules:   Network.Client
+  exposed-modules:   FRP.BearRiver.Extra
+                     Network.Client
                      Network.Common
                      Network.Server
 

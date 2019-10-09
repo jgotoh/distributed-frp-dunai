@@ -29,7 +29,9 @@ To modify GHCi startup used by ghcid, modify `.ghci`
 For more information see:
 https://github.com/ndmitchell/ghcid
 
-**TODO** source code formatter
+## Formatting
+
+All Haskell source files are formatted via [Brittany](https://github.com/lspitzner/brittany/).
 
 ## Profiling
 
