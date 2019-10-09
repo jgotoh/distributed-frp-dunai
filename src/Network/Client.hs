@@ -6,10 +6,34 @@ import qualified Control.Distributed.Process.Extras.Time as Time
 import qualified Control.Distributed.Process.Extras.Timer as Timer
 import qualified Control.Distributed.Process.ManagedProcess as MP
 import qualified Control.Distributed.Process.Node as Node
+import Control.Exception.Base
 import Data.ByteString.Char8
 import qualified Network.Socket as N
 import qualified Network.Transport.TCP as NT
 import qualified Network.Transport as T
+
+
+initializeClientNode :: N.HostName -> N.ServiceName -> IO (Either IOException Node.LocalNode)
+initializeClientNode ip port = do
+  -- TODO is Bifunctor.second usable here?
+  t <- NT.createTransport (NT.defaultTCPAddr ip port) NT.defaultTCPParameters
+  case t of
+    Left l -> return $ Left l
+    Right r -> do
+      n <- createLocalNode r
+      return $ Right n
+
+getLocalAddress :: Node.LocalNode -> T.EndPointAddress
+getLocalAddress node = P.nodeAddress $ Node.localNodeId node
+
+searchForServer :: String -> String -> P.Process (Maybe P.ProcessId)
+searchForServer name server = do
+  P.liftIO $ print $ "searching server process " ++ name ++ " - " ++ show serverNode
+  searchProcessTimeout name serverNode 1000
+    where
+      serverEndpoint = T.EndPointAddress $ pack server
+      serverNode = P.NodeId serverEndpoint
+
 
 launchClient :: N.HostName -> N.ServiceName -> String -> String -> String -> IO ()
 launchClient ip port nick server name = do

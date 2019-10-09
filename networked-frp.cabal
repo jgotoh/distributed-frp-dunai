@@ -23,9 +23,11 @@ library
   -- other-modules:
   -- other-extensions:
   build-depends:       base,
+                       bearriver,
                        binary,
                        bytestring,
                        distributed-process,
+                       distributed-process-async,
                        distributed-process-client-server,
                        distributed-process-extras,
                        dunai,
@@ -45,6 +47,9 @@ executable simple-example
   build-depends:       base,
                        bearriver,
                        bytestring,
+                       distributed-process,
+                       distributed-process-client-server,
+                       distributed-process-extras,
                        dunai,
                        monadIO,
                        mtl,

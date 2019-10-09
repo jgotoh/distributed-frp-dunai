@@ -9,14 +9,17 @@ import Network.Client
 import Network.Server
 import Time
 
+import qualified Control.Distributed.Process as P
+import qualified Control.Distributed.Process.Node as Node
 import Data.IORef
 import FRP.BearRiver
+import FRP.BearRiver.Extra
 import qualified SDL
 import System.IO
 
 main :: IO ()
 main = do
-  -- flush output on every newline to support prefixing output by sed
+  -- flush output on every newline to support output stream editing via sed
   hSetBuffering stdin LineBuffering
   hSetBuffering stdout LineBuffering
 
@@ -25,7 +28,7 @@ main = do
   print cfg
 
   case cfg of
-    ClientConfig ip port nick name server -> launchClient ip (show port) nick server name
+    ClientConfig ip port nick name server -> clientMain ip port nick name server--launchClient ip (show port) nick server name
     ServerConfig ip port name -> launchServer ip (show port) name
     GameConfig -> main'
 
@@ -38,6 +41,32 @@ main' = do
   reactimate (return $ GameInput False) (sense timeRef) (actuate renderer) gameSF
 
   quit window renderer
+
+clientMain :: String -> Int -> String -> String -> String -> IO ()
+clientMain ip port nick name server = do
+  (window, renderer) <- initializeSDL
+  timeRef <- createTimeRef
+
+  eNode <- initializeClientNode ip (show port)
+
+  case eNode of
+    Left ex-> error $ show ex
+    Right node -> do
+
+      P.liftIO $ print $ "Client starts at: " ++ show (getLocalAddress node)
+
+      SDL.showWindow window
+      reactimateNet (return $ GameInput False) (sense timeRef) (actuate renderer) gameSF (sendState node)
+
+      quit window renderer
+
+
+sendState :: Node.LocalNode -> GameState -> IO ()
+sendState node x = do
+  _ <- Node.forkProcess node $ do
+    return ()
+  return ()
+
 
 initializeSDL :: IO (SDL.Window, SDL.Renderer)
 initializeSDL = do
