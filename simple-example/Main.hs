@@ -9,7 +9,6 @@ import Network.Client
 import Network.Server
 import Time
 
-import qualified Control.Distributed.Process as P
 import qualified Control.Distributed.Process.Node as Node
 import Data.IORef
 import FRP.BearRiver
@@ -53,7 +52,8 @@ clientMain ip port nick name server = do
     Left ex-> error $ show ex
     Right node -> do
 
-      P.liftIO $ print $ "Client starts at: " ++ show (getLocalAddress node)
+      _ <- startClientNetworkProcess node
+
 
       SDL.showWindow window
       reactimateNet (return $ GameInput False) (sense timeRef) (actuate renderer) gameSF (sendState node)

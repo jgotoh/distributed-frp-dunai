@@ -1,6 +1,7 @@
 module Network.Client where
 
 import Network.Common
+import Control.Concurrent.STM.TQueue
 import qualified Control.Distributed.Process as P
 import qualified Control.Distributed.Process.Extras.Time as Time
 import qualified Control.Distributed.Process.Extras.Timer as Timer
@@ -12,6 +13,10 @@ import qualified Network.Socket as N
 import qualified Network.Transport.TCP as NT
 import qualified Network.Transport as T
 
+data Client a = Client { clientPid :: P.ProcessId
+                     , sendQueue :: TQueue (StateUpdate a)
+                     , readQueue :: TQueue (StateUpdate a)
+                     }
 
 initializeClientNode :: N.HostName -> N.ServiceName -> IO (Either IOException Node.LocalNode)
 initializeClientNode ip port = do
@@ -22,6 +27,13 @@ initializeClientNode ip port = do
     Right r -> do
       n <- createLocalNode r
       return $ Right n
+
+startClientNetworkProcess :: Node.LocalNode -> IO P.ProcessId
+startClientNetworkProcess node = do
+  Node.forkProcess node $ do
+    -- start Netin process
+    -- start Netout process
+    undefined
 
 getLocalAddress :: Node.LocalNode -> T.EndPointAddress
 getLocalAddress node = P.nodeAddress $ Node.localNodeId node
