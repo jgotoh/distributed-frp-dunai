@@ -47,7 +47,7 @@ main' = do
   quit window renderer
 
 clientMain :: String -> Int -> String -> String -> String -> IO ()
-clientMain ip port nick name server = do
+clientMain ip port nick name serverAddr = do
   (window, renderer) <- initializeSDL
   timeRef            <- createTimeRef
 
@@ -57,17 +57,24 @@ clientMain ip port nick name server = do
     Left  ex   -> error $ show ex
     Right node -> do
 
-      _ <- startClientNetworkProcess node
+      mServer <- runProcessResult node (searchForServer name serverAddr)
 
+      case mServer of
+        Just (Just server) -> do
 
-      SDL.showWindow window
-      reactimateNet (return $ GameInput False)
-                    (sense timeRef)
-                    (actuate renderer)
-                    gameSF
-                    (sendState node)
+          print "Server found"
+          (Client pid sQ rQ) <- startClientNetworkProcess node server nick
 
-      quit window renderer
+          SDL.showWindow window
+          reactimateNet (return $ GameInput False)
+                        (sense timeRef)
+                        (actuate renderer)
+                        gameSF
+                        (sendState node)
+
+          quit window renderer
+        _ -> error "server not found"
+
 
 
 sendState :: Node.LocalNode -> GameState -> IO ()

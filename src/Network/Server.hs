@@ -1,6 +1,9 @@
 {-# LANGUAGE DeriveGeneric #-}
 
-module Network.Server where
+module Network.Server
+  ( launchServer
+  )
+where
 
 import           Network.Common
 
