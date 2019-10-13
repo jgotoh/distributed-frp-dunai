@@ -9,6 +9,7 @@ import           Network.Client
 import           Network.Server
 import           Time
 
+import           Control.Concurrent.STM.TQueue
 import qualified Control.Distributed.Process.Node
                                                as Node
 import           Data.IORef
@@ -63,7 +64,7 @@ clientMain ip port nick name serverAddr = do
         Just (Just server) -> do
 
           print "Server found"
-          (Client pid sQ rQ) <- startClientNetworkProcess node server nick
+          (Client pid sQ rQ) <- (startClientNetworkProcess node server nick :: IO (Client String))
 
           SDL.showWindow window
           reactimateNet (return $ GameInput False)
