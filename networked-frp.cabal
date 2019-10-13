@@ -60,6 +60,7 @@ executable simple-example
                        optparse-applicative,
                        sdl2,
                        sdl2-gfx,
+                       stm,
                        text,
                        transformers-base
   hs-source-dirs:      simple-example

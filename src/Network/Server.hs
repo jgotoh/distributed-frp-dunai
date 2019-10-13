@@ -18,7 +18,9 @@ import qualified Control.Distributed.Process.ManagedProcess
                                                as MP
 import qualified Control.Distributed.Process.Node
                                                as Node
+import           Control.Distributed.Process.Serializable
 import           Control.Monad
+import Data.Binary
 import           GHC.Generics                   ( Generic )
 import qualified Network.Socket                as N
 import qualified Network.Transport.TCP         as NT
@@ -26,15 +28,18 @@ import qualified Network.Transport             as T
 import           Type.Reflection
 
 
-data Client = Client Nickname (P.SendPort (StateUpdate Message))
-  deriving (Generic, Show, Typeable)
+data Client a = Client Nickname (ServerStateSendPort a)
+  deriving (Generic, Typeable) -- Show here possible?
 
-type ServerState = [Client]
+instance Show (Client a) where
+  show (Client nick sp) = show "Client: " ++ nick ++ ", " ++ show sp
 
-nameClient :: Client -> Nickname
+type ServerState a = [Client a]
+
+nameClient :: Client a -> Nickname
 nameClient (Client nick _) = nick
 
-portClient :: Client -> (P.SendPort (StateUpdate Message))
+portClient :: Client a -> ServerStateSendPort a
 portClient (Client _ port) = port
 
 launchServer :: N.HostName -> N.ServiceName -> String -> IO ()
@@ -64,10 +69,10 @@ launchServer ip port name = do
   return ()
 
 pongServerProcess :: P.Process ()
-pongServerProcess = MP.serve () initHandler pongProcessDef
+pongServerProcess = MP.serve () initHandler (pongProcessDef :: MP.ProcessDefinition (ServerState Message))
   where initHandler _ = return (MP.InitOk [] Time.NoDelay)
 
-pongProcessDef :: MP.ProcessDefinition ServerState
+pongProcessDef :: (Binary a, Typeable a) => MP.ProcessDefinition (ServerState a)
 pongProcessDef = MP.defaultProcess
   { MP.apiHandlers            = [ MP.handleCall_ callPong
                                 , MP.handleCall handleJoinRequest
@@ -85,10 +90,10 @@ pongProcessDef = MP.defaultProcess
 
 -- TODO if decline if client with nickname already exists
 handleJoinRequest
-  :: MP.CallHandler ServerState JoinRequest (JoinRequestResult [Nickname])
+  :: (Binary a, Typeable a) => MP.CallHandler (ServerState a) (JoinRequest a) (JoinRequestResult [Nickname])
 handleJoinRequest s (JoinRequest nick port) = do
   P.liftIO $ print $ "JoinRequest:: " ++ show s'
-  _ <- P.monitorPort port
+  _ <- P.monitorPort (serverStateSendPort port)
   MP.reply (JoinRequestResult $ Right (JoinAccepted clients)) s'
  where
   client  = Client nick port
@@ -100,18 +105,18 @@ callPong x = do
   P.liftIO $ print $ "server: " ++ show x
   return Pong
 
-handleStateUpdate :: MP.ChannelHandler ServerState (StateUpdate Message) ()
+handleStateUpdate :: (Binary a, Typeable a) => MP.ChannelHandler (ServerState a) (StateUpdate a) ()
 handleStateUpdate port state msg = do
   broadcastUpdate msg (withoutClient sid state)
   MP.continue state
   where sid = P.sendPortId port
 
-broadcastUpdate :: StateUpdate Message -> [Client] -> P.Process ()
+broadcastUpdate :: (Binary a, Typeable a) => StateUpdate a -> [Client a] -> P.Process ()
 broadcastUpdate msg clients =
-  forM_ clients $ \(Client _ port) -> P.sendChan port msg
+  forM_ clients $ \(Client _ port) -> P.sendChan (serverStateSendPort port) msg
 
 handleMonitorNotification
-  :: MP.ActionHandler ServerState P.PortMonitorNotification
+  :: MP.ActionHandler (ServerState a) P.PortMonitorNotification
 handleMonitorNotification s (P.PortMonitorNotification ref port reason) = do
   P.liftIO
     $  print
@@ -124,12 +129,12 @@ handleMonitorNotification s (P.PortMonitorNotification ref port reason) = do
   MP.continue s'
   where s' = withoutClient port s
 
-withoutClient :: P.SendPortId -> ServerState -> ServerState
+withoutClient :: P.SendPortId -> (ServerState a) -> (ServerState a)
 withoutClient portId = filter (hasProcessId (P.sendPortProcessId portId))
  where
-  hasProcessId :: P.ProcessId -> Client -> Bool
+  hasProcessId :: P.ProcessId -> (Client a) -> Bool
   hasProcessId id' (Client _ port) =
-    P.sendPortProcessId (P.sendPortId port) /= id'
+    P.sendPortProcessId (P.sendPortId (serverStateSendPort port)) /= id'
 
 logInfo :: s -> Message -> MP.Action s
 logInfo s msg = do

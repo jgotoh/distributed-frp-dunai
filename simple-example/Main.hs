@@ -6,10 +6,12 @@ import           Game
 import           GameState
 import           Input
 import           Network.Client
+import Network.Common
 import           Network.Server
 import           Time
 
 import           Control.Concurrent.STM.TQueue
+import qualified Control.Distributed.Process as P
 import qualified Control.Distributed.Process.Node
                                                as Node
 import           Data.IORef
@@ -59,14 +61,17 @@ clientMain ip port nick name serverAddr = do
     Right node -> do
 
       mServer <- runProcessResult node (searchForServer name serverAddr)
+      (Just cChan) <- runProcessResult node (createClientStateChannel :: P.Process (ClientStateChannel Message))
+      (Just sChan) <- runProcessResult node (createServerStateChannel :: P.Process (ServerStateChannel Message))
 
       case mServer of
         Just (Just server) -> do
 
           print "Server found"
-          (Client pid sQ rQ) <- (startClientNetworkProcess node server nick :: IO (Client String))
+          (Client pid sQ rQ) <- (startClientNetworkProcess node server nick cChan sChan :: IO (Client Message))
 
           SDL.showWindow window
+
           reactimateNet (return $ GameInput False)
                         (sense timeRef)
                         (actuate renderer)

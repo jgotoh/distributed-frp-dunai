@@ -1,8 +1,5 @@
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE GADTs #-}
--- {-# LANGUAGE NoMonomorphismRestriction #-}
-{-# LANGUAGE StandaloneDeriving #-}
---{-# LANGUAGE PolyKinds, ConstraintKinds, TypeFamilies, UndecidableInstances, DataKinds, TypeOperators #-}
+
 module Network.Client where
 
 import           Network.Common
@@ -17,44 +14,30 @@ import qualified Control.Distributed.Process.ManagedProcess
                                                as MP
 import qualified Control.Distributed.Process.Node
                                                as Node
-import Control.Distributed.Process.Serializable
+import           Control.Distributed.Process.Serializable
 import           Control.Exception.Base
+import           Control.Monad
 import           Control.Monad.STM
-import Data.Binary
+import           Data.Binary
 import           Data.ByteString.Char8
 import           GHC.Generics                   ( Generic )
 import qualified Network.Socket                as N
 import qualified Network.Transport.TCP         as NT
 import qualified Network.Transport             as T
-import Type.Reflection
+import           Type.Reflection
 
 data Client a = Client { clientPid :: P.ProcessId
                      , sendQueue :: TQueue (StateUpdate a)
                      , readQueue :: TQueue (StateUpdate a)
                      }
---data Client a where
---  Client :: (Serializable a) => P.ProcessId -> TQueue (StateUpdate a) -> TQueue (StateUpdate a) -> Client a
-
 newtype Server = Server P.ProcessId
 
 -- TODO this is actually not possible because of newChan :: Serializable a => Process (SendPort a, ReceivePort a). Does it actually make sense?
-newtype ControlChannel a = ControlChannel (P.SendPort JoinRequest, P.ReceivePort (JoinRequestResult a))
+--newtype ControlChannel a = ControlChannel (P.SendPort JoinRequest, P.ReceivePort (JoinRequestResult a))
 
--- Channel used by the server to send StateUpdates to clients
-data ServerStateChannel a where
-  ServerStateChannel :: (Serializable a) => (ServerStateSendPort a) -> (ServerStateReceivePort a) -> ServerStateChannel a
 
 -- Channel used by clients to send StateUpdates to a server
-data ClientStateChannel a where
-  ClientStateChannel :: (Serializable a) => (ClientStateSendPort a) -> (ClientStateReceivePort a) -> ClientStateChannel a
-
--- Port used by a server to send StateUpdates to a client. Server -[state]-> Client
-newtype ServerStateSendPort a = ServerStateSendPort (P.SendPort (StateUpdate a))
-  deriving (Generic)
-
--- Port used by a client to receive StateUpdates from a server. Server -[state]-> Client
-newtype ServerStateReceivePort a = ServerStateReceivePort (P.ReceivePort (StateUpdate a))
-  deriving (Generic)
+data ClientStateChannel a = ClientStateChannel (ClientStateSendPort a) (ClientStateReceivePort a)
 
 -- Port used by a client to send StateUpdates to a server. Client -[state]-> Server
 newtype ClientStateSendPort a = ClientStateSendPort (P.SendPort (StateUpdate a))
@@ -75,8 +58,14 @@ initializeClientNode ip port = do
       n <- createLocalNode r
       return $ Right n
 
-startClientNetworkProcess :: Serializable a => Node.LocalNode -> Server -> String -> IO (Client a)
-startClientNetworkProcess node server nick = do
+startClientNetworkProcess
+  :: (Binary a, Typeable a) => Node.LocalNode
+  -> Server
+  -> String
+  -> ClientStateChannel a
+  -> ServerStateChannel a
+  -> IO (Client a)
+startClientNetworkProcess node server nick cChan sChan = do
   sQueue <- newTQueueIO
   rQueue <- newTQueueIO
   pid    <- Node.forkProcess node $ do
@@ -88,17 +77,16 @@ startClientNetworkProcess node server nick = do
       Server pid -> do
         P.link pid
 
-    let sp = undefined
-    joinResult <- sendJoinRequest server nick sp
+    let serverStateSendPort = case sChan of
+          ServerStateChannel sp rp -> sp
+
+    joinResult <- sendJoinRequest server nick serverStateSendPort
 
     case joinResult of
       JoinRequestResult e -> case e of
         Left  err -> P.liftIO $ print err
         Right acc -> do
           P.liftIO $ print $ "join successful: " ++ show acc
-
-          clientStateChan <- createClientStateChannel' --  :: P.Process (ClientStateChannel String)
-          --serverStateChan <- createServerStateChannel
 
           inPid <- P.liftIO $ Node.forkProcess node (receiveStateProcess rQueue)
           outPid <- P.liftIO $ Node.forkProcess node (sendStateProcess sQueue)
@@ -107,19 +95,38 @@ startClientNetworkProcess node server nick = do
           P.link outPid
           P.liftIO $ print "client network process ends"
           -- send stateChan.receivePort in JoinRequest
+  _ <- Node.forkProcess node $ linkPidIO pid
   return $ Client pid sQueue rQueue
 
-createClientStateChannel' :: Serializable a => P.Process a
-createClientStateChannel' = undefined
+linkPidIO :: P.ProcessId -> P.Process ()
+linkPidIO pid = do
+  ref <- P.monitor pid
+  forever $ do
+    n <- P.expect :: P.Process P.ProcessMonitorNotification
+    P.liftIO $ print $ show n
 
-createControlChannel :: P.Process (ControlChannel a)
-createControlChannel = undefined --ControlChannel <$> P.newChan
+--dispatcher :: TQueue (String, InputData) -> Process ()
+--dispatcher q = forever $ readQ q >>= uncurry nsend
+--  where readQ = liftIO . atomically . readTQueue
 
-createServerStateChannel :: Serializable a => P.Process (ServerStateChannel a)
-createServerStateChannel = (\(s,r) -> ServerStateChannel (ServerStateSendPort s)  (ServerStateReceivePort r)) <$> P.newChan
+--createControlChannel :: P.Process (ControlChannel a)
+--createControlChannel = undefined --ControlChannel <$> P.newChan
 
-createClientStateChannel :: (Binary a, Typeable a) =>  P.Process (ClientStateChannel a)
-createClientStateChannel = (\(s,r) -> ClientStateChannel (ClientStateSendPort s)  (ClientStateReceivePort r)) <$> P.newChan
+-- Creates a typed channel used by servers to send StateUpdates to clients.
+createServerStateChannel :: (Binary a, Typeable a) => P.Process (ServerStateChannel a)
+createServerStateChannel =
+  (\(s, r) ->
+      ServerStateChannel (ServerStateSendPort s) (ServerStateReceivePort r)
+    )
+    <$> P.newChan
+
+-- Creates a typed channel used by clients to send StateUpdates to a server.
+createClientStateChannel :: (Binary a, Typeable a) => P.Process (ClientStateChannel a)
+createClientStateChannel =
+  (\(s, r) ->
+      ClientStateChannel (ClientStateSendPort s) (ClientStateReceivePort r)
+    )
+    <$> P.newChan
 
 searchForServer :: String -> String -> P.Process (Maybe Server)
 searchForServer name server = do
@@ -181,7 +188,7 @@ launchClient ip port nick server name = do
           Just serverPid -> do
             P.link serverPid
             (sp, rp)   <- P.newChan
-            joinResult <- sendJoinRequest (Server serverPid) nick sp
+            joinResult <- sendJoinRequest (Server serverPid) nick (ServerStateSendPort sp)
             case joinResult of
               JoinRequestResult e -> case e of
                 Left  err -> P.liftIO $ print err
@@ -195,14 +202,14 @@ launchClient ip port nick server name = do
 
 -- send a JoinRequest that contains the client's nickname and the SendPort to receive simulation state updates
 sendJoinRequest
-  :: Server
+  :: (Binary a, Typeable a) => Server
   -> Nickname
-  -> P.SendPort (StateUpdate Message)
+  -> ServerStateSendPort a
   -> P.Process (JoinRequestResult [Nickname])
-sendJoinRequest (Server pid) nick port = do
+sendJoinRequest (Server pid) nick (ServerStateSendPort sp) = do
   P.liftIO $ print $ "send joinRequest: " ++ show request
   MP.call pid request :: P.Process (JoinRequestResult [Nickname])
-  where request = JoinRequest nick port
+  where request = JoinRequest nick (ServerStateSendPort sp)
 
 castPingLoop :: P.ProcessId -> P.Process ()
 castPingLoop pid = do
