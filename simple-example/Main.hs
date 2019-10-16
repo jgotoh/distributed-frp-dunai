@@ -6,14 +6,18 @@ import           Game
 import           GameState
 import           Input
 import           Network.Client
-import Network.Common
+import           Network.Common
 import           Network.Server
 import           Time
 
+import           Control.Concurrent
 import           Control.Concurrent.STM.TQueue
-import qualified Control.Distributed.Process as P
+import qualified Control.Distributed.Process   as P
+import           Control.Distributed.Process.Extras.Time
 import qualified Control.Distributed.Process.Node
                                                as Node
+import           Control.Monad
+import           Control.Monad.STM
 import           Data.IORef
 import           FRP.BearRiver
 import           FRP.BearRiver.Extra
@@ -32,12 +36,12 @@ main = do
 
   case cfg of
     ClientConfig ip port nick name server ->
-      clientMain ip port nick name server--launchClient ip (show port) nick server name
+      clientMain ip port nick name server
     ServerConfig ip port name -> launchServer ip (show port) name
-    GameConfig                -> main'
+    GameConfig                -> gameMain
 
-main' :: IO ()
-main' = do
+gameMain :: IO ()
+gameMain = do
   (window, renderer) <- initializeSDL
   timeRef            <- createTimeRef
 
@@ -51,44 +55,60 @@ main' = do
 
 clientMain :: String -> Int -> String -> String -> String -> IO ()
 clientMain ip port nick name serverAddr = do
-  (window, renderer) <- initializeSDL
-  timeRef            <- createTimeRef
+  --(window, renderer) <- initializeSDL
+  timeRef <- createTimeRef
 
-  eNode              <- initializeClientNode ip (show port)
+  eNode   <- initializeClientNode ip (show port)
 
   case eNode of
     Left  ex   -> error $ show ex
     Right node -> do
 
       mServer <- runProcessResult node (searchForServer name serverAddr)
-      (Just cChan) <- runProcessResult node (createClientStateChannel :: P.Process (ClientStateChannel Message))
-      (Just sChan) <- runProcessResult node (createServerStateChannel :: P.Process (ServerStateChannel Message))
 
       case mServer of
         Just (Just server) -> do
 
           print "Server found"
-          (Client pid sQ rQ) <- (startClientNetworkProcess node server nick cChan sChan :: IO (Client Message))
+          (Client pid sQ rQ) <-
+            (startClientProcess
+              node
+              server
+              nick
+              (createServerStateChannel :: P.Process
+                  (ServerStateChannel Message)
+              ) :: IO (Client Message)
+            )
 
-          SDL.showWindow window
+          _ <- testStateUpdateSending sQ
+          _ <- testStateUpdateReceiving rQ
 
-          reactimateNet (return $ GameInput False)
-                        (sense timeRef)
-                        (actuate renderer)
-                        gameSF
-                        (sendState node)
+          --SDL.showWindow window
 
-          quit window renderer
+          --reactimateNet (return $ GameInput False)
+          --              (sense timeRef)
+          --              (actuate renderer)
+          --              gameSF
+          --              (sendState node)
+          _ <- forever $ threadDelay 10000000
+          --quit window renderer
+          print "exit client"
         _ -> error "server not found"
 
+testStateUpdateSending sQ = forkIO $ forever $ do
+  atomically $ writeTQueue sQ $ StateUpdate Pong
+  threadDelay $ timeToMicros Millis 500
 
+testStateUpdateReceiving rQ = forkIO $ forever $ do
+  m <- atomically $ readTQueue rQ
+  print $ "received: " ++ show m
+  threadDelay $ timeToMicros Millis 500
 
 sendState :: Node.LocalNode -> GameState -> IO ()
 sendState node x = do
   _ <- Node.forkProcess node $ do
     return ()
   return ()
-
 
 initializeSDL :: IO (SDL.Window, SDL.Renderer)
 initializeSDL = do

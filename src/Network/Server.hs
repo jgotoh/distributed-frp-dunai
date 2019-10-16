@@ -2,10 +2,12 @@
 
 module Network.Server
   ( launchServer
+  , clientUpdate
+  , joinRequest
   )
 where
 
-import           Network.Common
+import           Network.Common          hiding ( Client )
 
 import           Control.Concurrent
 import qualified Control.Distributed.Process   as P
@@ -18,29 +20,40 @@ import qualified Control.Distributed.Process.ManagedProcess
                                                as MP
 import qualified Control.Distributed.Process.Node
                                                as Node
-import           Control.Distributed.Process.Serializable
 import           Control.Monad
-import Data.Binary
+import           Data.Binary
 import           GHC.Generics                   ( Generic )
 import qualified Network.Socket                as N
 import qualified Network.Transport.TCP         as NT
 import qualified Network.Transport             as T
 import           Type.Reflection
 
+-- client facing API
 
-data Client a = Client Nickname (ServerStateSendPort a)
-  deriving (Generic, Typeable) -- Show here possible?
+-- Sends a StateUpdate
+clientUpdate
+  :: (Addressable a, Binary m, Typeable m) => a -> StateUpdate m -> P.Process ()
+clientUpdate = MP.cast
+
+-- Sends a JoinRequest and returns the result
+joinRequest
+  :: (Addressable a, Binary m, Typeable m)
+  => a
+  -> JoinRequest m
+  -> P.Process (JoinRequestResult m [Nickname])
+joinRequest = MP.call
+
+
+data Client a = Client { nameClient :: Nickname
+                       , serverStateClient :: ServerStateSendPort a
+                       , clientStateClient :: ClientStateReceivePort a
+                       }
+  deriving (Generic, Typeable)
 
 instance Show (Client a) where
-  show (Client nick sp) = show "Client: " ++ nick ++ ", " ++ show sp
+  show c = "Client " ++ nameClient c ++ "," ++ show (serverStateClient c)
 
 type ServerState a = [Client a]
-
-nameClient :: Client a -> Nickname
-nameClient (Client nick _) = nick
-
-portClient :: Client a -> ServerStateSendPort a
-portClient (Client _ port) = port
 
 launchServer :: N.HostName -> N.ServiceName -> String -> IO ()
 launchServer ip port name = do
@@ -69,14 +82,18 @@ launchServer ip port name = do
   return ()
 
 pongServerProcess :: P.Process ()
-pongServerProcess = MP.serve () initHandler (pongProcessDef :: MP.ProcessDefinition (ServerState Message))
+pongServerProcess = MP.serve
+  ()
+  initHandler
+  (pongProcessDef :: MP.ProcessDefinition (ServerState Message))
   where initHandler _ = return (MP.InitOk [] Time.NoDelay)
 
 pongProcessDef :: (Binary a, Typeable a) => MP.ProcessDefinition (ServerState a)
 pongProcessDef = MP.defaultProcess
   { MP.apiHandlers            = [ MP.handleCall_ callPong
                                 , MP.handleCall handleJoinRequest
-                                , MP.handleRpcChan handleStateUpdate
+                                , MP.handleRpcChan handleStateUpdate'
+                                , MP.handleCast handleStateUpdate
                                 ]
   , MP.infoHandlers           = [ MP.handleInfo logInfo
                                 , MP.handleInfo handleMonitorNotification
@@ -90,30 +107,52 @@ pongProcessDef = MP.defaultProcess
 
 -- TODO if decline if client with nickname already exists
 handleJoinRequest
-  :: (Binary a, Typeable a) => MP.CallHandler (ServerState a) (JoinRequest a) (JoinRequestResult [Nickname])
-handleJoinRequest s (JoinRequest nick port) = do
+  :: (Binary a, Typeable a)
+  => MP.CallHandler
+       (ServerState a)
+       (JoinRequest a)
+       (JoinRequestResult a [Nickname])
+handleJoinRequest s (JoinRequest nick serverStatePort) = do
+  _ <- P.monitorPort (serverStateSendPort serverStatePort)
+  (ClientStateChannel sp rp) <- createClientStateChannel
+  let s' = client rp : s
   P.liftIO $ print $ "JoinRequest:: " ++ show s'
-  _ <- P.monitorPort (serverStateSendPort port)
-  MP.reply (JoinRequestResult $ Right (JoinAccepted clients)) s'
+  MP.reply (JoinRequestResult $ Right (JoinAccepted sp nicks)) s'
  where
-  client  = Client nick port
-  s'      = client : s
-  clients = map nameClient s
+  client = Client nick serverStatePort
+  nicks = map nameClient s
+
+handleStateUpdate
+  :: (Binary a, Typeable a) => MP.CastHandler (ServerState a) (StateUpdate a)
+handleStateUpdate s m = do
+  broadcastUpdate m s
+  MP.continue s
+
+-- Creates a typed channel used by clients to send StateUpdates to a server.
+createClientStateChannel
+  :: (Binary a, Typeable a) => P.Process (ClientStateChannel a)
+createClientStateChannel =
+  (\(s, r) ->
+      ClientStateChannel (ClientStateSendPort s) (ClientStateReceivePort r)
+    )
+    <$> P.newChan
 
 callPong :: Message -> P.Process Message
 callPong x = do
   P.liftIO $ print $ "server: " ++ show x
   return Pong
 
-handleStateUpdate :: (Binary a, Typeable a) => MP.ChannelHandler (ServerState a) (StateUpdate a) ()
-handleStateUpdate port state msg = do
+handleStateUpdate'
+  :: (Binary a, Typeable a)
+  => MP.ChannelHandler (ServerState a) (StateUpdate a) ()
+handleStateUpdate' port state msg = do
   broadcastUpdate msg (withoutClient sid state)
   MP.continue state
   where sid = P.sendPortId port
 
-broadcastUpdate :: (Binary a, Typeable a) => StateUpdate a -> [Client a] -> P.Process ()
-broadcastUpdate msg clients =
-  forM_ clients $ \(Client _ port) -> P.sendChan (serverStateSendPort port) msg
+broadcastUpdate
+  :: (Binary a, Typeable a) => StateUpdate a -> [Client a] -> P.Process ()
+broadcastUpdate msg clients = forM_ clients (serverUpdate msg)
 
 handleMonitorNotification
   :: MP.ActionHandler (ServerState a) P.PortMonitorNotification
@@ -125,16 +164,23 @@ handleMonitorNotification s (P.PortMonitorNotification ref port reason) = do
     ++ " reason: "
     ++ show reason
   P.liftIO $ print $ "new state: " ++ show s'
+
   P.unmonitor ref
   MP.continue s'
+  -- TODO: getClient s port, an client was senden um zu prüfen ob funkt?
   where s' = withoutClient port s
 
-withoutClient :: P.SendPortId -> (ServerState a) -> (ServerState a)
-withoutClient portId = filter (hasProcessId (P.sendPortProcessId portId))
- where
-  hasProcessId :: P.ProcessId -> (Client a) -> Bool
-  hasProcessId id' (Client _ port) =
-    P.sendPortProcessId (P.sendPortId (serverStateSendPort port)) /= id'
+serverUpdate
+  :: (Binary a, Typeable a) => StateUpdate a -> Client a -> P.Process ()
+serverUpdate m c = P.sendChan (serverStateSendPort (serverStateClient c)) m
+
+hasProcessId :: P.ProcessId -> Client a -> Bool
+hasProcessId id' (Client _ port _) =
+  P.sendPortProcessId (P.sendPortId (serverStateSendPort port)) == id'
+
+withoutClient :: P.SendPortId -> ServerState a -> ServerState a
+withoutClient portId =
+  filter (not <$> hasProcessId (P.sendPortProcessId portId))
 
 logInfo :: s -> Message -> MP.Action s
 logInfo s msg = do
