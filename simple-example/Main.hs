@@ -23,6 +23,7 @@ import           FRP.BearRiver
 import           FRP.BearRiver.Extra
 import qualified SDL
 import           System.IO
+import           System.Exit
 
 main :: IO ()
 main = do
@@ -55,7 +56,7 @@ gameMain = do
 
 clientMain :: String -> Int -> String -> String -> String -> IO ()
 clientMain ip port nick name serverAddr = do
-  --(window, renderer) <- initializeSDL
+  (window, renderer) <- initializeSDL
   timeRef <- createTimeRef
 
   eNode   <- initializeClientNode ip (show port)
@@ -83,15 +84,14 @@ clientMain ip port nick name serverAddr = do
           _ <- testStateUpdateSending sQ
           _ <- testStateUpdateReceiving rQ
 
-          --SDL.showWindow window
+          SDL.showWindow window
 
-          --reactimateNet (return $ GameInput False)
-          --              (sense timeRef)
-          --              (actuate renderer)
-          --              gameSF
-          --              (sendState node)
-          _ <- forever $ threadDelay 10000000
-          --quit window renderer
+          reactimateNet (return $ GameInput False)
+                        (sense timeRef)
+                        (actuate renderer)
+                        gameSF
+                        (sendState node)
+          quit window renderer
           print "exit client"
         _ -> error "server not found"
 
@@ -126,8 +126,11 @@ sense :: IORef DTime -> Bool -> IO (DTime, Maybe GameInput)
 sense timeRef _ = do
   dtSecs <- senseTime timeRef
   events <- SDL.pollEvents
+  when (quitEvent events) exitSuccess
   return (dtSecs, Just $ GameInput $ isJump events)
-  where isJump = Prelude.any (keyPressed SDL.KeycodeSpace)
+  where
+    isJump = Prelude.any (keyPressed SDL.KeycodeSpace)
+    quitEvent events = elem SDL.QuitEvent $ map SDL.eventPayload events
 
 eventIsQPress :: SDL.Event -> Bool
 eventIsQPress event' = case SDL.eventPayload event' of
