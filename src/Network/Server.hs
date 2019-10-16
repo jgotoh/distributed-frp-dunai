@@ -125,8 +125,11 @@ handleJoinRequest s (JoinRequest nick serverStatePort) = do
 handleStateUpdate
   :: (Binary a, Typeable a) => MP.CastHandler (ServerState a) (StateUpdate a)
 handleStateUpdate s m = do
-  broadcastUpdate m s
+  broadcastUpdate m (withoutClient pid s)
   MP.continue s
+  where
+    pid = case m of
+      StateUpdate pid' _ -> pid'
 
 -- Creates a typed channel used by clients to send StateUpdates to a server.
 createClientStateChannel
@@ -146,7 +149,7 @@ handleStateUpdate'
   :: (Binary a, Typeable a)
   => MP.ChannelHandler (ServerState a) (StateUpdate a) ()
 handleStateUpdate' port state msg = do
-  broadcastUpdate msg (withoutClient sid state)
+  broadcastUpdate msg (withoutClient' sid state)
   MP.continue state
   where sid = P.sendPortId port
 
@@ -167,8 +170,8 @@ handleMonitorNotification s (P.PortMonitorNotification ref port reason) = do
 
   P.unmonitor ref
   MP.continue s'
-  -- TODO: getClient s port, an client was senden um zu prüfen ob funkt?
-  where s' = withoutClient port s
+  where s' = withoutClient' port s
+
 
 serverUpdate
   :: (Binary a, Typeable a) => StateUpdate a -> Client a -> P.Process ()
@@ -178,9 +181,21 @@ hasProcessId :: P.ProcessId -> Client a -> Bool
 hasProcessId id' (Client _ port _) =
   P.sendPortProcessId (P.sendPortId (serverStateSendPort port)) == id'
 
-withoutClient :: P.SendPortId -> ServerState a -> ServerState a
-withoutClient portId =
+-- TODO summarize withoutClient[']. maybe via contramap
+withoutClient' :: P.SendPortId -> ServerState a -> ServerState a
+withoutClient' portId =
   filter (not <$> hasProcessId (P.sendPortProcessId portId))
+
+withoutClient :: P.ProcessId -> ServerState a -> ServerState a
+withoutClient pid =
+  filter (not <$> hasIdentification pid)
+
+generalizedHasId :: Eq b => b -> (Client a -> b) -> Client a -> Bool
+generalizedHasId b f c = b == f c
+
+hasIdentification :: P.ProcessId -> Client a -> Bool
+hasIdentification pid c = pid == (P.sendPortProcessId $ P.sendPortId $ serverStateSendPort $ serverStateClient c)
+-- P.sendPortProcessId
 
 logInfo :: s -> Message -> MP.Action s
 logInfo s msg = do

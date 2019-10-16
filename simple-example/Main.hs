@@ -81,7 +81,7 @@ clientMain ip port nick name serverAddr = do
               ) :: IO (Client Message)
             )
 
-          _ <- testStateUpdateSending sQ
+          _ <- testStateUpdateSending pid sQ
           _ <- testStateUpdateReceiving rQ
 
           SDL.showWindow window
@@ -95,8 +95,8 @@ clientMain ip port nick name serverAddr = do
           print "exit client"
         _ -> error "server not found"
 
-testStateUpdateSending sQ = forkIO $ forever $ do
-  atomically $ writeTQueue sQ $ StateUpdate Pong
+testStateUpdateSending pid sQ = forkIO $ forever $ do
+  atomically $ writeTQueue sQ $ StateUpdate pid Pong
   threadDelay $ timeToMicros Millis 500
 
 testStateUpdateReceiving rQ = forkIO $ forever $ do

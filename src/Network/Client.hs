@@ -229,7 +229,7 @@ chanPingLoop
   -> Message
   -> P.Process ()
 chanPingLoop pid rp msg0 = do
-  sendStateUpdate pid $ StateUpdate msg0
+  sendStateUpdate pid $ StateUpdate undefined msg0
   msg <- P.receiveChan rp
   P.liftIO $ print $ "received: " ++ show msg
   Timer.sleepFor 500 Time.Millis

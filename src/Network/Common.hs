@@ -87,7 +87,7 @@ data JoinAccepted a b = JoinAccepted (ClientStateSendPort a) b
   deriving (Generic, Show, Typeable)
 instance (Serializable a, Serializable b) => Binary (JoinAccepted a b)
 
-newtype StateUpdate a = StateUpdate a
+data StateUpdate a = StateUpdate P.ProcessId a
   deriving (Generic, Show, Typeable)
 instance Binary a => Binary (StateUpdate a)
 
