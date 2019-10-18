@@ -194,7 +194,7 @@ generalizedHasId :: Eq b => b -> (Client a -> b) -> Client a -> Bool
 generalizedHasId b f c = b == f c
 
 hasIdentification :: P.ProcessId -> Client a -> Bool
-hasIdentification pid c = pid == (P.sendPortProcessId $ P.sendPortId $ serverStateSendPort $ serverStateClient c)
+hasIdentification pid c = pid == P.sendPortProcessId (P.sendPortId $ serverStateSendPort $ serverStateClient c)
 -- P.sendPortProcessId
 
 logInfo :: s -> Message -> MP.Action s

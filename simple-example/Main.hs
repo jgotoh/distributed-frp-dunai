@@ -14,8 +14,6 @@ import           Control.Concurrent
 import           Control.Concurrent.STM.TQueue
 import qualified Control.Distributed.Process   as P
 import           Control.Distributed.Process.Extras.Time
-import qualified Control.Distributed.Process.Node
-                                               as Node
 import           Control.Monad
 import           Control.Monad.STM
 import           Data.IORef
@@ -81,34 +79,33 @@ clientMain ip port nick name serverAddr = do
               ) :: IO (Client Message)
             )
 
-          _ <- testStateUpdateSending pid sQ
-          _ <- testStateUpdateReceiving rQ
-
           SDL.showWindow window
 
           reactimateNet (return $ GameInput False)
                         (sense timeRef)
                         (actuate renderer)
                         gameSF
-                        (sendState node)
+                        (receiveState rQ)
+                        (createGameInput)
+                        (writeState sQ pid)
+
           quit window renderer
           print "exit client"
         _ -> error "server not found"
 
-testStateUpdateSending pid sQ = forkIO $ forever $ do
-  atomically $ writeTQueue sQ $ StateUpdate pid Pong
-  threadDelay $ timeToMicros Millis 500
 
-testStateUpdateReceiving rQ = forkIO $ forever $ do
-  m <- atomically $ readTQueue rQ
-  print $ "received: " ++ show m
-  threadDelay $ timeToMicros Millis 500
+receiveState :: TQueue (StateUpdate Message) -> IO (Maybe (StateUpdate Message))
+receiveState q = readQ q >>= (\m -> do case m of
+                                        Nothing -> return m
+                                        Just x -> do print $ "rec:" ++ show x; return m)
+  where readQ = atomically . tryReadTQueue
 
-sendState :: Node.LocalNode -> GameState -> IO ()
-sendState node x = do
-  _ <- Node.forkProcess node $ do
-    return ()
-  return ()
+writeState :: TQueue (StateUpdate Message) -> P.ProcessId -> GameState -> IO ()
+writeState q pid _ = atomically $ writeTQueue q $ StateUpdate pid Pong
+
+createGameInput
+        :: ((DTime, GameInput), Maybe (StateUpdate Message)) -> (DTime, GameInput)
+createGameInput = fst
 
 initializeSDL :: IO (SDL.Window, SDL.Renderer)
 initializeSDL = do
@@ -117,11 +114,9 @@ initializeSDL = do
   renderer <- createRenderer window
   return (window, renderer)
 
--- TODO send message
 actuate :: SDL.Renderer -> p -> GameState -> IO Bool
-actuate renderer _ state = renderGameState renderer state >> return False --qPressed
+actuate renderer _ state = renderGameState renderer state >> return False
 
--- TODO receive message
 sense :: IORef DTime -> Bool -> IO (DTime, Maybe GameInput)
 sense timeRef _ = do
   dtSecs <- senseTime timeRef
