@@ -120,16 +120,16 @@ handleJoinRequest s (JoinRequest nick serverStatePort) = do
   MP.reply (JoinRequestResult $ Right (JoinAccepted sp nicks)) s'
  where
   client = Client nick serverStatePort
-  nicks = map nameClient s
+  nicks  = map nameClient s
 
 handleStateUpdate
   :: (Binary a, Typeable a) => MP.CastHandler (ServerState a) (StateUpdate a)
 handleStateUpdate s m = do
   broadcastUpdate m (withoutClient pid s)
   MP.continue s
-  where
-    pid = case m of
-      StateUpdate pid' _ -> pid'
+ where
+  pid = case m of
+    StateUpdate pid' _ -> pid'
 
 -- Creates a typed channel used by clients to send StateUpdates to a server.
 createClientStateChannel
@@ -187,14 +187,14 @@ withoutClient' portId =
   filter (not <$> hasProcessId (P.sendPortProcessId portId))
 
 withoutClient :: P.ProcessId -> ServerState a -> ServerState a
-withoutClient pid =
-  filter (not <$> hasIdentification pid)
+withoutClient pid = filter (not <$> hasIdentification pid)
 
 generalizedHasId :: Eq b => b -> (Client a -> b) -> Client a -> Bool
 generalizedHasId b f c = b == f c
 
 hasIdentification :: P.ProcessId -> Client a -> Bool
-hasIdentification pid c = pid == P.sendPortProcessId (P.sendPortId $ serverStateSendPort $ serverStateClient c)
+hasIdentification pid c = pid == P.sendPortProcessId
+  (P.sendPortId $ serverStateSendPort $ serverStateClient c)
 -- P.sendPortProcessId
 
 logInfo :: s -> Message -> MP.Action s

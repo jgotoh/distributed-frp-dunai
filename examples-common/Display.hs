@@ -1,7 +1,6 @@
 module Display where
 
-import           GameState
-
+import           Types
 import           Data.Text
 import           Foreign.C
 import qualified SDL
@@ -41,8 +40,6 @@ drawBackground renderer = do
   SDL.rendererDrawColor renderer SDL.$= SDL.V4 100 149 237 255
   SDL.clear renderer
 
-drawState :: SDL.Renderer -> GameState -> IO ()
-drawState renderer state = drawCircle renderer $ leftBallPosState state
 
 drawCircle :: SDL.Renderer -> Position -> IO ()
 drawCircle renderer pos = do

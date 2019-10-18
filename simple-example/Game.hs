@@ -4,6 +4,7 @@ module Game where
 
 import GameState
 import Input
+import Types
 
 import Control.Monad.Reader (lift)
 import Control.Monad.Trans.MSF.Reader

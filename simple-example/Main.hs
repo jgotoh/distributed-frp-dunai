@@ -55,9 +55,9 @@ gameMain = do
 clientMain :: String -> Int -> String -> String -> String -> IO ()
 clientMain ip port nick name serverAddr = do
   (window, renderer) <- initializeSDL
-  timeRef <- createTimeRef
+  timeRef            <- createTimeRef
 
-  eNode   <- initializeClientNode ip (show port)
+  eNode              <- initializeClientNode ip (show port)
 
   case eNode of
     Left  ex   -> error $ show ex
@@ -95,16 +95,22 @@ clientMain ip port nick name serverAddr = do
 
 
 receiveState :: TQueue (StateUpdate Message) -> IO (Maybe (StateUpdate Message))
-receiveState q = readQ q >>= (\m -> do case m of
-                                        Nothing -> return m
-                                        Just x -> do print $ "rec:" ++ show x; return m)
+receiveState q =
+  readQ q
+    >>= (\m -> do
+          case m of
+            Nothing -> return m
+            Just x  -> do
+              print $ "rec:" ++ show x
+              return m
+        )
   where readQ = atomically . tryReadTQueue
 
 writeState :: TQueue (StateUpdate Message) -> P.ProcessId -> GameState -> IO ()
 writeState q pid _ = atomically $ writeTQueue q $ StateUpdate pid Pong
 
 createGameInput
-        :: ((DTime, GameInput), Maybe (StateUpdate Message)) -> (DTime, GameInput)
+  :: ((DTime, GameInput), Maybe (StateUpdate Message)) -> (DTime, GameInput)
 createGameInput = fst
 
 initializeSDL :: IO (SDL.Window, SDL.Renderer)
@@ -123,9 +129,9 @@ sense timeRef _ = do
   events <- SDL.pollEvents
   when (quitEvent events) exitSuccess
   return (dtSecs, Just $ GameInput $ isJump events)
-  where
-    isJump = Prelude.any (keyPressed SDL.KeycodeSpace)
-    quitEvent events = elem SDL.QuitEvent $ map SDL.eventPayload events
+ where
+  isJump = Prelude.any (keyPressed SDL.KeycodeSpace)
+  quitEvent events = elem SDL.QuitEvent $ map SDL.eventPayload events
 
 eventIsQPress :: SDL.Event -> Bool
 eventIsQPress event' = case SDL.eventPayload event' of
@@ -144,6 +150,9 @@ renderGameState renderer state = do
   drawBackground renderer
   drawState renderer state
   SDL.present renderer
+
+drawState :: SDL.Renderer -> GameState -> IO ()
+drawState renderer state = drawCircle renderer $ leftBallPosState state
 
 quit :: SDL.Window -> SDL.Renderer -> IO ()
 quit window renderer = do
