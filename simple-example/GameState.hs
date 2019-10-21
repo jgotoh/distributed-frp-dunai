@@ -10,6 +10,10 @@ type GameEnv = ReaderT GameSettings
 
 type PlayerEnv = ReaderT PlayerSettings
 
+data GameInput = GameInput
+  { jumpInput :: Bool
+  } deriving (Show)
+
 data GameSettings = GameSettings
   { groundHeightSettings :: Double
   }

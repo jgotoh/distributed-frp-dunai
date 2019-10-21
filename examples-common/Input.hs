@@ -2,10 +2,6 @@ module Input where
 
 import           SDL
 
-data GameInput = GameInput
-  { jumpInput :: Bool
-  } deriving (Show)
-
 keyPressed :: SDL.Keycode -> SDL.Event -> Bool
 keyPressed key ev = case SDL.eventPayload ev of
   SDL.KeyboardEvent eData -> case eData of

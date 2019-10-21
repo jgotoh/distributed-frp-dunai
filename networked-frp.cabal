@@ -79,3 +79,26 @@ executable simple-example
   default-language:    Haskell2010
   default-extensions:  Arrows
 
+executable distributed-paddles
+  main-is:             Main.hs
+  other-modules:       Game, GameState
+  build-depends:       base,
+                       bearriver,
+                       bytestring,
+                       distributed-process,
+                       distributed-process-client-server,
+                       distributed-process-extras,
+                       dunai,
+                       exceptions,
+                       examples-common,
+                       monadIO,
+                       mtl,
+                       network,
+                       networked-frp,
+                       sdl2,
+                       stm,
+                       transformers-base
+  hs-source-dirs:      distributed-paddles
+  default-language:    Haskell2010
+  default-extensions:  Arrows
+

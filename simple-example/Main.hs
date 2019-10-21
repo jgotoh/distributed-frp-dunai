@@ -41,7 +41,7 @@ main = do
 
 gameMain :: IO ()
 gameMain = do
-  (window, renderer) <- initializeSDL
+  (window, renderer) <- initializeSDL "simple-example"
   timeRef            <- createTimeRef
 
   SDL.showWindow window
@@ -52,9 +52,8 @@ gameMain = do
 
   quit window renderer
 
-clientMain :: String -> Int -> String -> String -> String -> IO ()
 clientMain ip port nick name serverAddr = do
-  (window, renderer) <- initializeSDL
+  (window, renderer) <- initializeSDL "simple-example"
   timeRef            <- createTimeRef
 
   eNode              <- initializeClientNode ip (show port)
@@ -113,13 +112,6 @@ createGameInput
   :: ((DTime, GameInput), Maybe (StateUpdate Message)) -> (DTime, GameInput)
 createGameInput = fst
 
-initializeSDL :: IO (SDL.Window, SDL.Renderer)
-initializeSDL = do
-  SDL.initializeAll
-  window   <- createWindow "simple-example" windowWidth windowHeight
-  renderer <- createRenderer window
-  return (window, renderer)
-
 actuate :: SDL.Renderer -> p -> GameState -> IO Bool
 actuate renderer _ state = renderGameState renderer state >> return False
 
@@ -154,10 +146,4 @@ renderGameState renderer state = do
 drawState :: SDL.Renderer -> GameState -> IO ()
 drawState renderer state = drawCircle renderer $ leftBallPosState state
 
-quit :: SDL.Window -> SDL.Renderer -> IO ()
-quit window renderer = do
-  putStrLn "quit"
-  SDL.destroyRenderer renderer
-  SDL.destroyWindow window
-  SDL.quit
 
