@@ -7,9 +7,6 @@ import qualified SDL
 import           SDL.Vect
 import qualified SDL.Primitive                 as SDL
 
-playerRadius :: Double
-playerRadius = 15
-
 windowWidth :: CInt
 windowWidth = 400
 
@@ -48,17 +45,17 @@ drawBackground renderer = do
   SDL.clear renderer
 
 
-drawCircle :: SDL.Renderer -> Position -> IO ()
-drawCircle renderer pos = do
+drawCircle :: SDL.Renderer -> Position -> SDL.Radius -> IO ()
+drawCircle renderer pos radius = do
   SDL.smoothEllipse renderer
                     (sdlpos pos)
-                    (round playerRadius)
-                    (round playerRadius)
+                    radius
+                    radius
                     color
   SDL.fillEllipse renderer
                   (sdlpos pos)
-                  (round playerRadius)
-                  (round playerRadius)
+                  radius
+                  radius
                   color
  where
   color  = SDL.V4 240 142 125 255

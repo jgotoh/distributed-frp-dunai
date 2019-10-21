@@ -144,6 +144,6 @@ renderGameState renderer state = do
   SDL.present renderer
 
 drawState :: SDL.Renderer -> GameState -> IO ()
-drawState renderer state = drawCircle renderer $ leftBallPosState state
+drawState renderer state = drawCircle renderer (leftBallPosState state) 15
 
 

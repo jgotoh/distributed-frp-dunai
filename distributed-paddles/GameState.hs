@@ -11,10 +11,6 @@ type PlayerEnv = ReaderT PlayerSettings
 
 type BallEnv = ReaderT BallSettings
 
--- TODO change to V2 Double, for use in BallSF
-data Direction = Up | Down
-  deriving Show
-
 data GameInput = GameInput
   { directionInput :: Maybe Direction
   } deriving (Show)
@@ -41,5 +37,6 @@ data BallSettings = BallSettings
 
 data GameState = GameState
   { localPlayerState :: PlayerSettings
+  , ballState :: BallSettings
   }
   deriving (Show)

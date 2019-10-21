@@ -11,6 +11,7 @@ import           GameState
 --import           Network.Common
 --import           Network.Server
 import           Time
+import           Types
 
 import           Control.Applicative
 --import           Control.Concurrent
@@ -42,8 +43,8 @@ main = do
 --    ClientConfig ip port nick name server -> undefined
     ClientConfig _ _ _ _ _ -> undefined
 --    ServerConfig ip port name             -> undefined
-    ServerConfig _ _ _             -> undefined
-    GameConfig                            -> gameMain
+    ServerConfig _ _ _     -> undefined
+    GameConfig             -> gameMain
 
 gameMain :: IO ()
 gameMain = do
@@ -54,16 +55,21 @@ gameMain = do
   reactimate (return $ GameInput Nothing)
              (sense timeRef)
              (actuate renderer)
-             (runPlayerReader localPlayer gameSF)
+             (runGameReader gs gameSF)
 
   quit window renderer
-  where
-    localPlayer = PlayerSettings (SDL.V2 50 100) (SDL.V2 0 175) localPlayerColor
-    localPlayerColor = SDL.V4 240 142 125 255
+ where
+  localPlayer = PlayerSettings (SDL.V2 50 100) (SDL.V2 0 175) localPlayerColor
+  ball = BallSettings (SDL.V2 200 150) (SDL.V2 200 200) localPlayerColor
+  gs = GameSettings localPlayer ball
+  localPlayerColor = SDL.V4 240 142 125 255
 
-runPlayerReader :: Monad m =>
-              PlayerSettings -> SF (PlayerEnv m) GameInput GameState -> SF m GameInput GameState
-runPlayerReader ps sf = readerS $ runReaderS_ (runReaderS sf) ps
+runGameReader
+  :: Monad m
+  => GameSettings
+  -> SF (GameEnv m) GameInput GameState
+  -> SF m GameInput GameState
+runGameReader gs sf = readerS $ runReaderS_ (runReaderS sf) gs
 
 actuate :: SDL.Renderer -> p -> GameState -> IO Bool
 actuate renderer _ state = renderGameState renderer state >> return False
@@ -82,8 +88,8 @@ direction :: IO (Maybe Direction)
 direction = do
   isKey <- SDL.getKeyboardState
   return
-    $   (boolToMaybe isKey SDL.ScancodeUp Up)
-    <|> (boolToMaybe isKey SDL.ScancodeDown Down)
+    $   (boolToMaybe isKey SDL.ScancodeUp (SDL.V2 0 1))
+    <|> (boolToMaybe isKey SDL.ScancodeDown (SDL.V2 0 $ -1))
 
 boolToMaybe
   :: (SDL.Scancode -> Bool) -> SDL.Scancode -> Direction -> Maybe Direction
@@ -109,12 +115,13 @@ renderGameState renderer state = do
 
 drawState :: SDL.Renderer -> GameState -> IO ()
 drawState renderer state = do
-  drawPlayer renderer (localPlayer state)
-  -- drawCircle renderer $ leftBallPosState state
+  drawPlayer renderer $ localPlayer state
+  drawBall renderer $ ballState state
   where localPlayer s = localPlayerState s
 
 drawPlayer :: SDL.Renderer -> PlayerSettings -> IO ()
 drawPlayer r ps = drawRect r (playerPosition ps) (playerColor ps)
 
-
+drawBall :: SDL.Renderer -> BallSettings -> IO ()
+drawBall r bs = drawCircle r (ballPosition bs) 4
 
