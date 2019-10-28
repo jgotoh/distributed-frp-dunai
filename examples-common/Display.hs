@@ -7,16 +7,19 @@ import qualified SDL
 import           SDL.Vect
 import qualified SDL.Primitive                 as SDL
 
-windowWidth :: CInt
+windowWidth :: Int
 windowWidth = 400
 
-windowHeight :: CInt
+windowHeight :: Int
 windowHeight = 250
+
+cint :: Int -> CInt
+cint = CInt . fromIntegral
 
 initializeSDL :: String -> IO (SDL.Window, SDL.Renderer)
 initializeSDL title = do
   SDL.initializeAll
-  window   <- createWindow title windowWidth windowHeight
+  window   <- createWindow title (cint windowWidth) (cint windowHeight)
   renderer <- createRenderer window
   return (window, renderer)
 
@@ -45,28 +48,29 @@ drawBackground renderer = do
   SDL.clear renderer
 
 
-drawCircle :: SDL.Renderer -> Position -> SDL.Radius -> IO ()
+drawCircle :: SDL.Renderer -> Position -> Radius -> IO ()
 drawCircle renderer pos radius = do
   SDL.smoothEllipse renderer
-                    (sdlpos pos)
-                    radius
-                    radius
-                    color
+                  (cint <$> sdlpos pos)
+                  (round radius)
+                  (round radius)
+                  color
   SDL.fillEllipse renderer
-                  (sdlpos pos)
-                  radius
-                  radius
+                  (cint <$> sdlpos pos)
+                  (round radius)
+                  (round radius)
                   color
  where
   color  = SDL.V4 240 142 125 255
 
+sdlpos :: V2 Double -> V2 Int
 sdlpos pos = subtractWindowHeight (round <$> pos)
 
-drawRect :: SDL.Renderer -> Position -> Color -> IO ()
-drawRect r pos = do
-  SDL.fillRectangle r (sdlpos pos) (sdlpos $ pos ^+^ (V2 10 50))
+drawRect :: SDL.Renderer -> Position -> Bounds -> Color -> IO ()
+drawRect r pos bounds = do
+  SDL.fillRectangle r (cint <$> sdlpos pos) (cint <$> (sdlpos $ pos ^+^ bounds))
 
-subtractWindowHeight :: V2 CInt -> V2 CInt
+subtractWindowHeight :: V2 Int -> V2 Int
 subtractWindowHeight v = case v of
   V2 x y -> V2 x (windowHeight - y)
 

@@ -14,6 +14,7 @@ import           Time
 import           Types
 
 import           Control.Applicative
+import Control.Exception
 --import           Control.Concurrent
 --import           Control.Concurrent.STM.TQueue
 --import qualified Control.Distributed.Process   as P
@@ -52,6 +53,7 @@ gameMain = do
   timeRef            <- createTimeRef
 
   SDL.showWindow window
+
   reactimate (return $ GameInput Nothing)
              (sense timeRef)
              (actuate renderer)
@@ -59,8 +61,8 @@ gameMain = do
 
   quit window renderer
  where
-  localPlayer = PlayerSettings (SDL.V2 50 100) (SDL.V2 0 175) localPlayerColor
-  ball = BallSettings (SDL.V2 200 150) (SDL.V2 200 200) localPlayerColor
+  localPlayer = PlayerSettings (SDL.V2 50 100) (SDL.V2 10 50) (SDL.V2 0 175) localPlayerColor
+  ball = BallSettings (SDL.V2 200 150) 4 (SDL.V2 200 200) localPlayerColor
   gs = GameSettings localPlayer ball
   localPlayerColor = SDL.V4 240 142 125 255
 
@@ -80,7 +82,6 @@ sense timeRef _ = do
   events <- SDL.pollEvents
   when (quitEvent events) exitSuccess
   dir <- direction
-  print $ show dir
   return (dtSecs, Just $ GameInput $ dir)
   where quitEvent events = elem SDL.QuitEvent $ map SDL.eventPayload events
 
@@ -120,8 +121,8 @@ drawState renderer state = do
   where localPlayer s = localPlayerState s
 
 drawPlayer :: SDL.Renderer -> PlayerSettings -> IO ()
-drawPlayer r ps = drawRect r (playerPosition ps) (playerColor ps)
+drawPlayer r ps = drawRect r (playerPosition ps) (playerBounds ps) (playerColor ps)
 
 drawBall :: SDL.Renderer -> BallSettings -> IO ()
-drawBall r bs = drawCircle r (ballPosition bs) 4
+drawBall r bs = drawCircle r (ballPosition bs) (ballRadius bs)
 

@@ -41,7 +41,7 @@ library
   default-language:    Haskell2010
 
 library examples-common
-  exposed-modules:     Config, Display, Input, Time, Types
+  exposed-modules:     Collision, Config, Display, Input, Time, Types
   hs-source-dirs:      examples-common
   default-language:    Haskell2010
   default-extensions:  Arrows
@@ -82,6 +82,9 @@ executable simple-example
 executable distributed-paddles
   main-is:             Main.hs
   other-modules:       Game, GameState
+--  ghc-options:         -prof
+--                       -fprof-auto
+--                       "-with-rtsopts=-p -s -hd -xc"
   build-depends:       base,
                        bearriver,
                        bytestring,

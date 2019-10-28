@@ -13,6 +13,10 @@ type Position = V2 Double
 type Velocity = V2 Double
 type Color = SDL.Primitive.Color
 type Direction = V2 Double
+type Collisions a = [Event a]
+type Bounds = V2 Double
+type Radius = Double
+
 
 -- TODO orphaninstance
 instance RealFloat a => VectorSpace (V2 a) a where
