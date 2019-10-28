@@ -58,9 +58,9 @@ boundsCollisionSF :: Monad m => SF (BallEnv m) BallSettings [Event Collision]
 boundsCollisionSF = arr (\bs -> (toShapeBall bs)) >>> arr broadphaseShape >>> arr (boundsColliding 0 windowWidth 0 windowHeight) >>> edge >>> arr (fmap $ \_ -> BoundsCollision) >>> arr pure
 
 collisionSF :: Monad m => SF (BallEnv m) (Direction, Collisions Collision) Direction
-collisionSF = arr (\(dir, cs) -> foldl lel dir (cs' cs) ) -- (fromEvent <$> cs))
+collisionSF = arr (\(dir, cs) -> foldl applyCollision dir (cs' cs) )
   where
-    lel dir c = case c of
+    applyCollision dir c = case c of
       PlayerCollision -> dir * (V2 (-1) 1)
       BoundsCollision -> dir * (V2 (-1) (-1))
   -- TODO V2 values here are wrong
