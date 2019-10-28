@@ -1,5 +1,3 @@
-{-# LANGUAGE TupleSections #-}
-
 module Main where
 
 import           Config
@@ -14,7 +12,7 @@ import           Time
 import           Types
 
 import           Control.Applicative
-import Control.Exception
+import           Control.Exception
 --import           Control.Concurrent
 --import           Control.Concurrent.STM.TQueue
 --import qualified Control.Distributed.Process   as P
@@ -61,8 +59,11 @@ gameMain = do
 
   quit window renderer
  where
-  localPlayer = PlayerSettings (SDL.V2 50 100) (SDL.V2 10 50) (SDL.V2 0 175) localPlayerColor
-  ball = BallSettings (SDL.V2 200 150) 4 (SDL.V2 200 200) localPlayerColor
+  localPlayer = PlayerSettings (SDL.V2 50 100)
+                               (SDL.V2 10 50)
+                               (SDL.V2 0 175)
+                               localPlayerColor
+  ball = BallSettings (SDL.V2 200 150) 4 (SDL.V2 350 350) localPlayerColor
   gs = GameSettings localPlayer ball
   localPlayerColor = SDL.V4 240 142 125 255
 
@@ -82,15 +83,15 @@ sense timeRef _ = do
   events <- SDL.pollEvents
   when (quitEvent events) exitSuccess
   dir <- direction
-  return (dtSecs, Just $ GameInput $ dir)
+  return (dtSecs, Just $ GameInput dir)
   where quitEvent events = elem SDL.QuitEvent $ map SDL.eventPayload events
 
 direction :: IO (Maybe Direction)
 direction = do
   isKey <- SDL.getKeyboardState
   return
-    $   (boolToMaybe isKey SDL.ScancodeUp (SDL.V2 0 1))
-    <|> (boolToMaybe isKey SDL.ScancodeDown (SDL.V2 0 $ -1))
+    $   boolToMaybe isKey SDL.ScancodeUp (SDL.V2 0 1)
+    <|> boolToMaybe isKey SDL.ScancodeDown (SDL.V2 0 $ -1)
 
 boolToMaybe
   :: (SDL.Scancode -> Bool) -> SDL.Scancode -> Direction -> Maybe Direction
@@ -118,10 +119,12 @@ drawState :: SDL.Renderer -> GameState -> IO ()
 drawState renderer state = do
   drawPlayer renderer $ localPlayer state
   drawBall renderer $ ballState state
-  where localPlayer s = localPlayerState s
+  drawCircle renderer (SDL.V2 0 0) 30
+  where localPlayer = localPlayerState
 
 drawPlayer :: SDL.Renderer -> PlayerSettings -> IO ()
-drawPlayer r ps = drawRect r (playerPosition ps) (playerBounds ps) (playerColor ps)
+drawPlayer r ps =
+  drawRect r (playerPosition ps) (playerBounds ps) (playerColor ps)
 
 drawBall :: SDL.Renderer -> BallSettings -> IO ()
 drawBall r bs = drawCircle r (ballPosition bs) (ballRadius bs)

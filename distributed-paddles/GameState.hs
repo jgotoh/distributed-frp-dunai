@@ -46,16 +46,17 @@ data GameState = GameState
   deriving (Show)
 
 toShapeBall :: BallSettings -> ToShape BallSettings
-toShapeBall (BallSettings p r _ _) = ToShape
-  { broadphaseShape = Sphere p r
-  , narrowphaseShape = Sphere p r
-  }
+toShapeBall (BallSettings p r _ _) =
+  ToShape { broadphaseShape = Sphere p r, narrowphaseShape = Sphere p r }
 
 toShapePlayer :: PlayerSettings -> ToShape PlayerSettings
 toShapePlayer (PlayerSettings p b _ _) = ToShape
-  { broadphaseShape = Sphere p radius
+  { broadphaseShape  = Sphere center radius
   , narrowphaseShape = AABB p b
   }
-  where radius = case b of
-          V2 x y -> max x y
+ where
+  radius = case b of
+    V2 x y -> max x y
+  center = p + 0.5 * b
+
 
