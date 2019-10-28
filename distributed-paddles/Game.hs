@@ -13,7 +13,7 @@ import FRP.BearRiver hiding (dot, (^+^))
 import SDL.Vect hiding (identity, trace)
 import Data.MonadicStreamFunction.InternalCore
 
--- TODO move into dunai/Extra.hs
+-- TODO move to dunai/Extra.hs
 -- | Well-formed looped connection of an output component as a future input.
 -- Receives initial input via monadic action
 feedbackM :: Monad m => m c -> MSF m (a, c) (b, c) -> MSF m a b
@@ -21,6 +21,15 @@ feedbackM act sf = MSF $ \a -> do
   c <- act
   ((b', c'), sf') <- unMSF sf (a, c)
   return (b', feedback c' sf')
+
+-- TODO move to bearriver/Extra.hs
+edgeJust :: Monad m => SF m (Maybe a) (Event a)
+edgeJust = edgeBy isJustEdge (Just undefined)
+    where
+        isJustEdge Nothing  Nothing     = Nothing
+        isJustEdge Nothing  ma@(Just _) = ma
+        isJustEdge (Just _) (Just _)    = Nothing
+        isJustEdge (Just _) Nothing     = Nothing
 
 gameSF :: (Monad m, MonadFix m) => SF (GameEnv m) GameInput GameState
 gameSF = feedbackM (act) loopingGame
@@ -55,16 +64,20 @@ playerCollisionSF :: Monad m => SF (BallEnv m) (PlayerSettings, BallSettings) [E
 playerCollisionSF = arr (\(ps, bs) -> broadphase (toShapeBall bs) (toShapePlayer ps)) >>> edge >>> arr (fmap (\_ -> PlayerCollision)) >>> arr pure
 
 boundsCollisionSF :: Monad m => SF (BallEnv m) BallSettings [Event Collision]
-boundsCollisionSF = arr (\bs -> (toShapeBall bs)) >>> arr broadphaseShape >>> arr (boundsColliding 0 windowWidth 0 windowHeight) >>> edge >>> arr (fmap $ \_ -> BoundsCollision) >>> arr pure
+boundsCollisionSF = arr (\bs -> (toShapeBall bs)) >>> arr broadphaseShape >>> arr (boundsColliding 0 windowWidth 0 windowHeight) >>> edgeJust >>> arr (fmap $ BoundsCollision) >>> arr pure
 
 collisionSF :: Monad m => SF (BallEnv m) (Direction, Collisions Collision) Direction
 collisionSF = arr (\(dir, cs) -> foldl applyCollision dir (cs' cs) )
   where
     applyCollision dir c = case c of
       PlayerCollision -> dir * (V2 (-1) 1)
-      BoundsCollision -> dir * (V2 (-1) (-1))
-  -- TODO V2 values here are wrong
+      BoundsCollision side -> dir * dirChange side
     cs' cs = fromEvent <$> (filter isEvent cs)
+    dirChange side = case side of
+      TopSide -> V2 1 (-1)
+      BottomSide -> V2 1 (-1)
+      LeftSide -> V2 (-1) 1
+      RightSide -> V2 (-1) 1
 
 movingBallSF :: Monad m => SF (BallEnv m) ((GameInput, Collisions Collision), Direction) (BallSettings, Direction)
 movingBallSF = proc ((_, cs), dir) -> do

@@ -11,7 +11,7 @@ type PlayerEnv = ReaderT PlayerSettings
 
 type BallEnv = ReaderT BallSettings
 
-data Collision = BoundsCollision | PlayerCollision
+data Collision = BoundsCollision Side | PlayerCollision
 
 data GameInput = GameInput
   { directionInput :: Maybe Direction
