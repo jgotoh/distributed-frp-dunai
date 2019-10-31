@@ -1,6 +1,11 @@
+{-# LANGUAGE DeriveGeneric #-}
+
 module GameState where
 
 import           Collision
+import           Data.Binary
+import           GHC.Generics                   ( Generic )
+import           Type.Reflection
 import           Types
 import           Control.Monad.Reader
 import           SDL.Vect
@@ -29,7 +34,8 @@ data PlayerSettings = PlayerSettings
   , playerVelocity :: Velocity
   , playerColor :: Color
   }
-  deriving (Show)
+  deriving (Generic, Show, Typeable)
+instance Binary PlayerSettings
 
 data BallSettings = BallSettings
   { ballPosition :: Position
@@ -37,13 +43,15 @@ data BallSettings = BallSettings
   , ballVelocity :: Velocity
   , ballColor :: Color
   }
-  deriving (Show)
+  deriving (Generic, Show, Typeable)
+instance Binary BallSettings
 
 data GameState = GameState
   { localPlayerState :: PlayerSettings
   , ballState :: BallSettings
   }
-  deriving (Show)
+  deriving (Generic, Show, Typeable)
+instance Binary GameState
 
 toShapeBall :: BallSettings -> ToShape BallSettings
 toShapeBall (BallSettings p r _ _) =

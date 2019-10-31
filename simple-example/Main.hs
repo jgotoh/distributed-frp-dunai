@@ -36,7 +36,7 @@ main = do
   case cfg of
     ClientConfig ip port nick name server ->
       clientMain ip port nick name server
-    ServerConfig ip port name -> launchServer ip (show port) name
+    ServerConfig ip port name -> startServerProcess ip (show port) name (serverProcessDef :: ServerProcessDefinition Message)
     GameConfig                -> gameMain
 
 gameMain :: IO ()

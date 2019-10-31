@@ -1,9 +1,12 @@
 {-# LANGUAGE DeriveGeneric #-}
 
 module Network.Server
-  ( launchServer
-  , clientUpdate
+  (
+  clientUpdate
   , joinRequest
+  , serverProcessDef
+  , startServerProcess
+  , ServerProcessDefinition
   )
 where
 
@@ -43,6 +46,7 @@ joinRequest
   -> P.Process (JoinRequestResult m [Nickname])
 joinRequest = MP.call
 
+type ServerProcessDefinition a = MP.ProcessDefinition (ServerState a)
 
 data Client a = Client { nameClient :: Nickname
                        , serverStateClient :: ServerStateSendPort a
@@ -55,8 +59,8 @@ instance Show (Client a) where
 
 type ServerState a = [Client a]
 
-launchServer :: N.HostName -> N.ServiceName -> String -> IO ()
-launchServer ip port name = do
+startServerProcess :: (Binary a, Typeable a) => N.HostName -> N.ServiceName -> String -> ServerProcessDefinition a -> IO ()
+startServerProcess ip port name def = do
   Right transport <- NT.createTransport (NT.defaultTCPAddr ip port)
                                         NT.defaultTCPParameters
   -- TODO print error, also return Either from launchServer
@@ -67,7 +71,7 @@ launchServer ip port name = do
 
     let serverAddress =
           P.nodeAddress $ Node.localNodeId node :: T.EndPointAddress
-    pid <- P.spawnLocal pongServerProcess
+    pid <- P.spawnLocal $ serverProcess def
 
     P.link pid
 
@@ -81,15 +85,15 @@ launchServer ip port name = do
     P.liftIO $ forever $ threadDelay 16
   return ()
 
-pongServerProcess :: P.Process ()
-pongServerProcess = MP.serve
+serverProcess :: (Binary a, Typeable a) => ServerProcessDefinition a -> P.Process ()
+serverProcess def = MP.serve
   ()
   initHandler
-  (pongProcessDef :: MP.ProcessDefinition (ServerState Message))
+  def
   where initHandler _ = return (MP.InitOk [] Time.NoDelay)
 
-pongProcessDef :: (Binary a, Typeable a) => MP.ProcessDefinition (ServerState a)
-pongProcessDef = MP.defaultProcess
+serverProcessDef :: (Binary a, Typeable a) => ServerProcessDefinition a
+serverProcessDef = MP.defaultProcess
   { MP.apiHandlers            = [ MP.handleCall_ callPong
                                 , MP.handleCall handleJoinRequest
                                 , MP.handleRpcChan handleStateUpdate'
@@ -104,7 +108,7 @@ pongProcessDef = MP.defaultProcess
   , MP.unhandledMessagePolicy = MP.Log
   }
 
-
+-- TODO pass in function that decides whether request is accepted
 -- TODO if decline if client with nickname already exists
 handleJoinRequest
   :: (Binary a, Typeable a)
@@ -195,7 +199,6 @@ generalizedHasId b f c = b == f c
 hasIdentification :: P.ProcessId -> Client a -> Bool
 hasIdentification pid c = pid == P.sendPortProcessId
   (P.sendPortId $ serverStateSendPort $ serverStateClient c)
--- P.sendPortProcessId
 
 logInfo :: s -> Message -> MP.Action s
 logInfo s msg = do

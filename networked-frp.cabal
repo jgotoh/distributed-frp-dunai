@@ -87,6 +87,7 @@ executable distributed-paddles
 --                       "-with-rtsopts=-p -s -hd -xc"
   build-depends:       base,
                        bearriver,
+                       binary,
                        bytestring,
                        distributed-process,
                        distributed-process-client-server,

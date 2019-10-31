@@ -5,21 +5,21 @@ import           Display
 import           Game
 import           GameState
 --import           Input
---import           Network.Client
---import           Network.Common
---import           Network.Server
+import           Network.Client
+import           Network.Common
+import           Network.Server
 import           Time
 import           Types
 
 import           Control.Applicative
 import           Control.Exception
 --import           Control.Concurrent
---import           Control.Concurrent.STM.TQueue
---import qualified Control.Distributed.Process   as P
+import           Control.Concurrent.STM.TQueue
+import qualified Control.Distributed.Process   as P
 --import           Control.Distributed.Process.Extras.Time
 import           Control.Monad
 --import Control.Monad.Reader (lift)
---import           Control.Monad.STM
+import           Control.Monad.STM
 import           Control.Monad.Trans.MSF.Reader
 import           Data.IORef
 import           FRP.BearRiver
@@ -39,10 +39,8 @@ main = do
   print cfg
 
   case cfg of
---    ClientConfig ip port nick name server -> undefined
-    ClientConfig _ _ _ _ _ -> undefined
---    ServerConfig ip port name             -> undefined
-    ServerConfig _ _ _     -> undefined
+    ClientConfig ip port nick name server -> clientMain ip port nick name server
+    ServerConfig ip port name     -> startServerProcess ip (show port) name (serverProcessDef :: ServerProcessDefinition GameState)
     GameConfig             -> gameMain
 
 gameMain :: IO ()
@@ -66,6 +64,69 @@ gameMain = do
   ball = BallSettings (SDL.V2 200 150) 4 (SDL.V2 350 350) localPlayerColor
   gs = GameSettings localPlayer ball
   localPlayerColor = SDL.V4 240 142 125 255
+
+clientMain ip port nick name serverAddr = do
+  (window, renderer) <- initializeSDL "distributed-paddles"
+  timeRef            <- createTimeRef
+
+  eNode <- initializeClientNode ip (show port)
+
+  case eNode of
+    Left ex -> error $ show ex
+    Right node -> do
+
+      mServer <- runProcessResult node (searchForServer name serverAddr)
+
+      case mServer of
+        Just (Just server) -> do
+
+          print "Found Server"
+
+          (Client pid sQ rQ) <-
+            (startClientProcess
+              node
+              server
+              nick
+              (createServerStateChannel :: P.Process
+                  (ServerStateChannel GameState)
+              ) :: IO (Client GameState)
+            )
+
+          SDL.showWindow window
+
+          -- TODO differentiate between host and join session, depending on joinResult
+          reactimateNet (return $ GameInput Nothing)
+                        (sense timeRef)
+                        (actuate renderer)
+                        (runGameReader gs gameSF)
+                        (receiveState rQ)
+                        fst
+                        (writeState sQ pid)
+
+          quit window renderer
+ where
+  localPlayer = PlayerSettings (SDL.V2 50 100)
+                               (SDL.V2 10 50)
+                               (SDL.V2 0 175)
+                               localPlayerColor
+  ball = BallSettings (SDL.V2 200 150) 4 (SDL.V2 350 350) localPlayerColor
+  gs = GameSettings localPlayer ball
+  localPlayerColor = SDL.V4 240 142 125 255
+
+receiveState :: TQueue (StateUpdate GameState) -> IO (Maybe (StateUpdate GameState))
+receiveState q =
+  readQ q
+    >>= (\m -> do
+          case m of
+            Nothing -> return m
+            Just x  -> do
+              print $ "rec:" ++ show x
+              return m
+        )
+  where readQ = atomically . tryReadTQueue
+
+writeState :: TQueue (StateUpdate GameState) -> P.ProcessId -> GameState -> IO ()
+writeState q pid gs = atomically $ writeTQueue q $ StateUpdate pid gs
 
 runGameReader
   :: Monad m
