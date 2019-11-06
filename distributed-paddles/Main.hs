@@ -109,18 +109,25 @@ clientMain ip port nick name serverAddr = do
  where
   firstPlayer = PlayerSettings (SDL.V2 50 100)
                                (SDL.V2 10 50)
-                               (SDL.V2 0 175)
+                               (SDL.V2 0 20)
                                firstPlayerColor
   ball = BallSettings (SDL.V2 200 150) 4 (SDL.V2 350 350) firstPlayerColor
   firstGS = GameSettings firstPlayer secondPlayer ball
   firstPlayerColor = SDL.V4 240 142 125 255
-  secondPlayer = PlayerSettings (SDL.V2 300 100) (SDL.V2 10 50) (SDL.V2 0 175) firstPlayerColor
+  secondPlayer = PlayerSettings (SDL.V2 300 100) (SDL.V2 10 50) (SDL.V2 0 20) firstPlayerColor
   secondGS = GameSettings secondPlayer firstPlayer ball
 
 receiveState
   :: TQueue (StateUpdate GameState) -> IO (Maybe (StateUpdate GameState))
 receiveState q =
   readQ q
+    >>= (\m -> do
+          case m of
+            Nothing -> return m
+            Just _  -> do
+              print $ "rec:" ++ show m
+              return m
+        )
   where readQ = atomically . tryReadTQueue
 
 writeState

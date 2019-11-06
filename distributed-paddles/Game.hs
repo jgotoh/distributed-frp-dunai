@@ -7,7 +7,7 @@ import Network.Common
 import           Types
 
 import           Data.Maybe
---import           Debug.Trace
+import           Debug.Trace
 import           Control.Monad.Fix
 import           Control.Monad.Reader           ( lift )
 import           Control.Monad.Trans.MSF.Reader
@@ -63,7 +63,7 @@ loopingGame
   :: (Monad m) => SF (GameEnv m) ((GameInput, (Maybe (StateUpdate GameState))), GameState) (GameState, GameState)
 loopingGame =
   (arr gi_gs >>> morphS (selectEnv localPlayerSettings) localPlayerSF)
-    &&& (arr su_gs >>> first (constant Nothing) >>> morphS (selectEnv remotePlayerSettings) remotePlayerSF)
+    &&& (arr su_gs >>> morphS (selectEnv remotePlayerSettings) remotePlayerSF)
     &&& (arr gi_gs >>> morphS (selectEnv ballSettings) ballSF)
     >>> arr (\(ps, (ps', bs)) -> ((ps, ps'), bs))
     >>> arr ((uncurry . uncurry) GameState)
@@ -76,9 +76,9 @@ remoteLoopingGame
   :: (Monad m) => SF (GameEnv m) ((GameInput, (Maybe (StateUpdate GameState))), GameState) (GameState, GameState)
 remoteLoopingGame =
   (arr gi_gs >>> morphS (selectEnv localPlayerSettings) localPlayerSF)
-    &&& (arr su_gs >>> first (constant Nothing) >>> morphS (selectEnv remotePlayerSettings) remotePlayerSF)
+    &&& (arr su_gs >>> morphS (selectEnv remotePlayerSettings) remotePlayerSF)
   -- TODO unit test su is Nothing -> static remote ball/ player
-    &&& (arr su_gs >>> first (constant Nothing) >>> morphS (selectEnv ballSettings) remoteBallSF)
+    &&& (arr su_gs >>> morphS (selectEnv ballSettings) remoteBallSF)
     >>> arr (\(ps, (ps', bs)) -> ((ps, ps'), bs))
     >>> arr ((uncurry . uncurry) GameState)
     >>> arr dup
@@ -95,8 +95,11 @@ localPlayerSF
 localPlayerSF = arr fst >>> arr directionInput >>> paddleSF
 
 remotePlayerSF :: (Monad m) => SF (PlayerEnv m) ((Maybe (StateUpdate GameState)), a) PlayerSettings
-remotePlayerSF = arr fst >>> arr (fmap getDir) >>> paddleSF
-  where getDir _ = undefined
+remotePlayerSF = arr fst >>> arr (fmap getDir) >>> arrLog >>> paddleSF
+  where getDir (StateUpdate _ gs) = SDL.Vect.normalize (playerVelocity . localPlayerState $ gs)
+
+arrLog :: (Monad m, Show a) => MSF m a a
+arrLog = arr (\x -> trace (show x) x)
 
 ballSF :: (Monad m) => SF (BallEnv m) (a, GameState) BallSettings
 ballSF = second resolveCollisions >>> feedback ballDir0 movingBallSF
