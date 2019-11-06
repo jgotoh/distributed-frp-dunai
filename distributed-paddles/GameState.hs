@@ -24,6 +24,7 @@ data GameInput = GameInput
 
 data GameSettings = GameSettings
   { localPlayerSettings :: PlayerSettings
+  , remotePlayerSettings :: PlayerSettings
   , ballSettings :: BallSettings
   }
   deriving (Show)
@@ -48,6 +49,7 @@ instance Binary BallSettings
 
 data GameState = GameState
   { localPlayerState :: PlayerSettings
+  , remotePlayerState :: PlayerSettings
   , ballState :: BallSettings
   }
   deriving (Generic, Show, Typeable)

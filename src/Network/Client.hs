@@ -44,51 +44,55 @@ startClientProcess
   -> Server
   -> String
   -> P.Process (ServerStateChannel a)
-  -> IO (Client a)
+  -> IO (Client a, TMVar (JoinRequestResult [Nickname]))
 startClientProcess node server nick sChanP = do
   sQueue <- newTQueueIO
   rQueue <- newTQueueIO
+  rVar <- newEmptyTMVarIO
   pid    <- Node.forkProcess node $ catch
-    (sChanP >>= \sChan -> clientProcess node server nick sChan rQueue sQueue)
+    (do
+        ServerStateChannel sp rp <- sChanP
+        joinResult <- sendJoinRequest server nick sp
+
+        P.liftIO . atomically $ putTMVar rVar joinResult
+
+        case joinResult of
+          JoinRequestResult r -> case r of
+            Left err -> do
+              P.liftIO $ print err
+            Right acc -> do
+              P.liftIO $ print $ "join successful: " ++ show acc
+              clientProcess node server rp rQueue sQueue)
     (\e -> P.liftIO $ print $ show (e :: SomeException))
-  return $ Client pid sQueue rQueue
+  return $ (Client pid sQueue rQueue, rVar) -- return $ (Client _, CurrentState)
 
 -- TODO create something along the lines of P.ProcessDefinition for clients
 clientProcess
   :: (Binary a, Typeable a)
   => Node.LocalNode
   -> Server
-  -> String
-  -> ServerStateChannel a
+  -> ServerStateReceivePort a
   -> TQueue (StateUpdate a)
   -> TQueue (StateUpdate a)
   -> P.Process ()
-clientProcess node server nick (ServerStateChannel sp rp) rQueue sQueue = do
+clientProcess node server rp rQueue sQueue = do
   P.liftIO $ print $ "Client starts at: " ++ show
     (P.nodeAddress $ Node.localNodeId node)
 
   case server of
     Server pid -> P.link pid
 
-  joinResult <- sendJoinRequest server nick sp
+  inPid <- P.liftIO
+    $ Node.forkProcess node (receiveStateProcess rQueue rp)
+  outPid <- P.liftIO
+    $ Node.forkProcess node (sendStateProcess sQueue server)
 
-  case joinResult of
-    JoinRequestResult e -> case e of
-      Left  err -> P.liftIO $ print err
-      Right acc -> do
-        P.liftIO $ print $ "join successful: " ++ show acc
+  P.link inPid
+  P.link outPid
 
-        inPid <- P.liftIO
-          $ Node.forkProcess node (receiveStateProcess rQueue rp)
-        outPid <- P.liftIO
-          $ Node.forkProcess node (sendStateProcess sQueue server)
-
-        P.link inPid
-        P.link outPid
-
-        P.liftIO $ print "clientProcess now waits"
-        _ <- P.liftIO $ forever $ threadDelay 100000
-        P.liftIO $ print "clientProcess ends"
+  P.liftIO $ print "clientProcess now waits"
+  _ <- P.liftIO $ forever $ threadDelay 100000
+  P.liftIO $ print "clientProcess ends"
 
 monitoringProcess :: P.ProcessId -> P.Process ()
 monitoringProcess pid = do
@@ -154,7 +158,7 @@ sendJoinRequest
   => Server
   -> Nickname
   -> ServerStateSendPort a
-  -> P.Process (JoinRequestResult a [Nickname])
+  -> P.Process (JoinRequestResult [Nickname])
 sendJoinRequest s nick (ServerStateSendPort sp) = do
   P.liftIO $ print $ "send joinRequest: " ++ show request
   joinRequest s request
@@ -206,7 +210,7 @@ launchClient ip port nick server name = do
             return ()
           Nothing -> return ()
   return ()
-  where msg (JoinAccepted _ nicks) = if Prelude.null nicks then Ping else Pong
+  where msg (JoinAccepted nicks) = if Prelude.null nicks then Ping else Pong
 
 castPingLoop :: P.ProcessId -> P.Process ()
 castPingLoop pid = do

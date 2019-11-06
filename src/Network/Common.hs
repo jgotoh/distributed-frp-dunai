@@ -46,19 +46,6 @@ instance Routable Server where
   unsafeSendTo s m =
     resolve s >>= maybe (error $ unresolvableMessage s) (`P.unsafeSend` m)
 
--- Channel used by clients to send StateUpdates to a server
-data ClientStateChannel a = ClientStateChannel (ClientStateSendPort a) (ClientStateReceivePort a)
-
--- Port used by a client to send StateUpdates to a server. Client -[state]-> Server
--- TODO remove, client states are sent via MP.call
-newtype ClientStateSendPort a = ClientStateSendPort (P.SendPort (StateUpdate a))
-  deriving (Generic, Show, Typeable)
-instance Serializable a => Binary (ClientStateSendPort a)
-
--- Port used by a server to receive StateUpdates from a client. Client -[state]-> Server
-newtype ClientStateReceivePort a = ClientStateReceivePort (P.ReceivePort (StateUpdate a))
-  deriving (Generic)
-
 -- Channel used by the server to send StateUpdates to clients
 data ServerStateChannel a = ServerStateChannel (ServerStateSendPort a) (ServerStateReceivePort a)
 
@@ -75,17 +62,17 @@ data JoinRequest a = JoinRequest Nickname (ServerStateSendPort a)
   deriving (Generic, Show, Typeable)
 instance Serializable a => Binary (JoinRequest a)
 
-newtype JoinRequestResult a b = JoinRequestResult (Either JoinError (JoinAccepted a b))
+newtype JoinRequestResult a = JoinRequestResult (Either JoinError (JoinAccepted a))
   deriving (Generic, Show, Typeable)
-instance (Serializable a, Serializable b) => Binary (JoinRequestResult a b)
+instance Serializable a => Binary (JoinRequestResult a)
 
 newtype JoinError = JoinError String
   deriving (Generic, Show, Typeable)
 instance Binary JoinError
 
-data JoinAccepted a b = JoinAccepted (ClientStateSendPort a) b
+data JoinAccepted a = JoinAccepted a
   deriving (Generic, Show, Typeable)
-instance (Serializable a, Serializable b) => Binary (JoinAccepted a b)
+instance Serializable a => Binary (JoinAccepted a)
 
 data StateUpdate a = StateUpdate P.ProcessId a
   deriving (Generic, Show, Typeable)
@@ -99,15 +86,6 @@ serverStateReceivePort
   :: ServerStateReceivePort a -> P.ReceivePort (StateUpdate a)
 serverStateReceivePort rp = case rp of
   ServerStateReceivePort p -> p
-
-clientStateSendPort :: ClientStateSendPort a -> P.SendPort (StateUpdate a)
-clientStateSendPort sp = case sp of
-  ClientStateSendPort p -> p
-
-clientStateReceivePort
-  :: ClientStateReceivePort a -> P.ReceivePort (StateUpdate a)
-clientStateReceivePort rp = case rp of
-  ClientStateReceivePort p -> p
 
 -- Searches for a Process under address addr called name. When timeLeft runs out, returns Nothing
 searchProcessTimeout

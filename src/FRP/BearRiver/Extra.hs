@@ -8,7 +8,6 @@ import           Data.Maybe
 import           Data.MonadicStreamFunction.InternalCore
 import           FRP.BearRiver
 
--- TODO put something between sense and combine, to avoid calls to combine when netin is Nothing
 reactimateNet
   :: Monad m
   => m a
@@ -28,6 +27,28 @@ reactimateNet senseI sense actuate sf netin combine netout = do
     &&& (withSideEffect netout)
     >>> arr fst
   return ()
+
+reactimateNet'
+  :: Monad m
+  => m a
+  -> (Bool -> m (DTime, Maybe a))
+  -> (Bool -> b -> m Bool)
+  -> SF Identity (a,Maybe c) b
+  -> m (Maybe c)
+  -> (b -> m ())
+  -> m ()
+reactimateNet' senseI sense actuate sf netin netout = do
+  MSF.reactimateB
+    $   (senseSF senseI sense &&& (arrM $ \() -> netin))
+    >>> arr reorder
+    >>> sfIO sf
+    >>> (actuateSF actuate)
+    &&& (withSideEffect netout)
+    >>> arr fst
+  return ()
+
+reorder :: ((DTime, a), Maybe c) -> (DTime, (a, Maybe c))
+reorder ((t, a), c) = (t, (a, c))
 
 sfIO :: Monad m => MSF (ReaderT r Identity) a b -> MSF m (r, a) b
 sfIO sf = morphS (return . runIdentity) (runReaderS sf)

@@ -43,14 +43,13 @@ joinRequest
   :: (Addressable a, Binary m, Typeable m)
   => a
   -> JoinRequest m
-  -> P.Process (JoinRequestResult m [Nickname])
+  -> P.Process (JoinRequestResult [Nickname])
 joinRequest = MP.call
 
 type ServerProcessDefinition a = MP.ProcessDefinition (ServerState a)
 
 data Client a = Client { nameClient :: Nickname
                        , serverStateClient :: ServerStateSendPort a
-                       , clientStateClient :: ClientStateReceivePort a
                        }
   deriving (Generic, Typeable)
 
@@ -115,13 +114,12 @@ handleJoinRequest
   => MP.CallHandler
        (ServerState a)
        (JoinRequest a)
-       (JoinRequestResult a [Nickname])
+       (JoinRequestResult [Nickname])
 handleJoinRequest s (JoinRequest nick serverStatePort) = do
   _ <- P.monitorPort (serverStateSendPort serverStatePort)
-  (ClientStateChannel sp rp) <- createClientStateChannel
-  let s' = client rp : s
+  let s' = client : s
   P.liftIO $ print $ "JoinRequest:: " ++ show s'
-  MP.reply (JoinRequestResult $ Right (JoinAccepted sp nicks)) s'
+  MP.reply (JoinRequestResult $ Right (JoinAccepted nicks)) s'
  where
   client = Client nick serverStatePort
   nicks  = map nameClient s
@@ -134,15 +132,6 @@ handleStateUpdate s m = do
  where
   pid = case m of
     StateUpdate pid' _ -> pid'
-
--- Creates a typed channel used by clients to send StateUpdates to a server.
-createClientStateChannel
-  :: (Binary a, Typeable a) => P.Process (ClientStateChannel a)
-createClientStateChannel =
-  (\(s, r) ->
-      ClientStateChannel (ClientStateSendPort s) (ClientStateReceivePort r)
-    )
-    <$> P.newChan
 
 callPong :: Message -> P.Process Message
 callPong x = do
@@ -176,13 +165,12 @@ handleMonitorNotification s (P.PortMonitorNotification ref port reason) = do
   MP.continue s'
   where s' = withoutClient' port s
 
-
 serverUpdate
   :: (Binary a, Typeable a) => StateUpdate a -> Client a -> P.Process ()
 serverUpdate m c = P.sendChan (serverStateSendPort (serverStateClient c)) m
 
 hasProcessId :: P.ProcessId -> Client a -> Bool
-hasProcessId id' (Client _ port _) =
+hasProcessId id' (Client _ port) =
   P.sendPortProcessId (P.sendPortId (serverStateSendPort port)) == id'
 
 -- TODO summarize withoutClient[']. maybe via contramap
