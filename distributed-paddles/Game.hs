@@ -44,9 +44,9 @@ gameSF = feedbackM act loopingGame
     gs <- lift ask
     return (toState gs)
   toState gs = GameState (ps0 gs) (rps0 gs) (bs0 gs)
-  ps0 = localPlayerSettings
-  bs0 = ballSettings
-  rps0 = remotePlayerSettings
+  ps0 = toPlayerState . localPlayerSettings
+  bs0 = toBallState . ballSettings
+  rps0 = toPlayerState . remotePlayerSettings
 
 remoteGameSF :: (Monad m, MonadFix m) => SF (GameEnv m) (GameInput, (Maybe (StateUpdate GameState))) GameState
 remoteGameSF = feedbackM act remoteLoopingGame
@@ -55,9 +55,9 @@ remoteGameSF = feedbackM act remoteLoopingGame
     gs <- lift ask
     return (toState gs)
   toState gs = GameState (ps0 gs) (rps0 gs) (bs0 gs)
-  ps0 = localPlayerSettings
-  bs0 = ballSettings
-  rps0 = remotePlayerSettings
+  ps0 = toPlayerState . localPlayerSettings
+  bs0 = toBallState . ballSettings
+  rps0 = toPlayerState . remotePlayerSettings
 
 loopingGame
   :: (Monad m) => SF (GameEnv m) ((GameInput, (Maybe (StateUpdate GameState))), GameState) (GameState, GameState)
@@ -91,23 +91,23 @@ selectEnv
 selectEnv f = mapReaderT $ withReaderT f
 
 localPlayerSF
-  :: (Monad m) => SF (PlayerEnv m) (GameInput, a) PlayerSettings
+  :: (Monad m) => SF (PlayerEnv m) (GameInput, a) PlayerState
 localPlayerSF = arr fst >>> arr directionInput >>> paddleSF
 
-remotePlayerSF :: (Monad m) => SF (PlayerEnv m) ((Maybe (StateUpdate GameState)), a) PlayerSettings
-remotePlayerSF = arr fst >>> arr (fmap getDir) >>> arrLog >>> paddleSF
-  where getDir (StateUpdate _ gs) = SDL.Vect.normalize (playerVelocity . localPlayerState $ gs)
+remotePlayerSF :: (Monad m) => SF (PlayerEnv m) ((Maybe (StateUpdate GameState)), a) PlayerState
+remotePlayerSF = arr fst >>> arr (fmap getDir) >>> paddleSF
+  where getDir (StateUpdate _ gs) = SDL.Vect.normalize (playerVelocityState . localPlayerState $ gs)
 
-arrLog :: (Monad m, Show a) => MSF m a a
-arrLog = arr (\x -> trace (show x) x)
+arrTrace :: (Monad m, Show a) => MSF m a a
+arrTrace = arr (\x -> trace (show x) x)
 
-ballSF :: (Monad m) => SF (BallEnv m) (a, GameState) BallSettings
+ballSF :: (Monad m) => SF (BallEnv m) (a, GameState) BallState
 ballSF = second resolveCollisions >>> feedback ballDir0 movingBallSF
   where
     -- TODO replace ballDir0 with feedbackM usage! create BallState adt
         ballDir0 = V2 (-0.75) $ -0.12
 
-remoteBallSF :: (Monad m) => SF (BallEnv m) ((Maybe (StateUpdate GameState)), GameState) BallSettings
+remoteBallSF :: (Monad m) => SF (BallEnv m) ((Maybe (StateUpdate GameState)), GameState) BallState
 remoteBallSF = second resolveCollisions >>> arr id >>> feedback ballDir0 movingBallSF
   -- TODO combine su with gs
   where
@@ -122,14 +122,14 @@ resolveCollisions =
 
 -- edge avoids multiple events for a single collision -> TODO create test
 playerCollisionSF
-  :: Monad m => SF (BallEnv m) (PlayerSettings, BallSettings) [Event Collision]
+  :: Monad m => SF (BallEnv m) (PlayerState, BallState) [Event Collision]
 playerCollisionSF =
   arr (\(ps, bs) -> broadphase (toShapeBall bs) (toShapePlayer ps))
     >>> edge
     >>> arr (fmap (const PlayerCollision))
     >>> arr pure
 
-boundsCollisionSF :: Monad m => SF (BallEnv m) BallSettings [Event Collision]
+boundsCollisionSF :: Monad m => SF (BallEnv m) BallState [Event Collision]
 boundsCollisionSF =
   arr toShapeBall
     >>> arr broadphaseShape
@@ -157,34 +157,34 @@ movingBallSF
   => SF
        (BallEnv m)
        ((a, Collisions Collision), Direction)
-       (BallSettings, Direction)
+       (BallState, Direction)
 movingBallSF = proc ((_, cs), dir) -> do
   c      <- morphS bsToPs colorSF -< undefined
   dir'   <- collisionSF -< (dir, cs)
   (p, v) <- morphS bsToPs moveSF -< Just dir'
-  b      <- constM (lift $ asks ballRadius) -< undefined
-  returnA -< (BallSettings p b v c, dir')
+  b      <- constM (lift $ asks ballRadius0) -< undefined
+  returnA -< (BallState p b v c, dir')
  where
   bsToPs = mapReaderT $ withReaderT ps
   ps (BallSettings p b v c) = PlayerSettings p (V2 b b) v c
 
-paddleSF :: Monad m => SF (PlayerEnv m) (Maybe Direction) PlayerSettings
+paddleSF :: Monad m => SF (PlayerEnv m) (Maybe Direction) PlayerState
 paddleSF = proc dir -> do
   c      <- colorSF -< undefined
   (p, v) <- moveSF -< dir
-  b      <- constM (lift $ asks playerBounds) -< undefined
-  returnA -< PlayerSettings p b v c
+  b      <- constM (lift $ asks playerBounds0) -< undefined
+  returnA -< PlayerState p b v c
 
 moveSF :: Monad m => SF (PlayerEnv m) (Maybe Direction) (Position, Velocity)
 moveSF = proc dir -> do
-  v    <- constM (lift $ asks playerVelocity) -< undefined
-  p0   <- constM (lift $ asks playerPosition) -< undefined
+  v    <- constM (lift $ asks playerVelocityMax) -< undefined
+  p0   <- constM (lift $ asks playerPosition0) -< undefined
   dir' <- arr (fromMaybe (V2 0 0)) -< dir
   v'   <- arr (uncurry (*)) -< (v, dir')
   dp   <- integral -< v'
   p'   <- arr (uncurry (+)) -< (p0, dp)
-  returnA -< (p', v)
+  returnA -< (p', v')
 
 colorSF :: Monad m => SF (PlayerEnv m) a Color
-colorSF = constM (lift $ asks playerColor)
+colorSF = constM (lift $ asks playerColor0)
 

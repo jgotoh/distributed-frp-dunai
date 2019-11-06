@@ -109,26 +109,29 @@ clientMain ip port nick name serverAddr = do
  where
   firstPlayer = PlayerSettings (SDL.V2 50 100)
                                (SDL.V2 10 50)
-                               (SDL.V2 0 20)
+                               (SDL.V2 0 175)
                                firstPlayerColor
   ball = BallSettings (SDL.V2 200 150) 4 (SDL.V2 350 350) firstPlayerColor
   firstGS = GameSettings firstPlayer secondPlayer ball
   firstPlayerColor = SDL.V4 240 142 125 255
-  secondPlayer = PlayerSettings (SDL.V2 300 100) (SDL.V2 10 50) (SDL.V2 0 20) firstPlayerColor
+  secondPlayer = PlayerSettings (SDL.V2 300 100) (SDL.V2 10 50) (SDL.V2 0 175) firstPlayerColor
   secondGS = GameSettings secondPlayer firstPlayer ball
 
 receiveState
   :: TQueue (StateUpdate GameState) -> IO (Maybe (StateUpdate GameState))
-receiveState q =
-  readQ q
-    >>= (\m -> do
-          case m of
-            Nothing -> return m
-            Just _  -> do
-              print $ "rec:" ++ show m
-              return m
-        )
-  where readQ = atomically . tryReadTQueue
+receiveState q = readQ q >>= \(s, e) -> do
+    case s of
+      Just _ -> do
+        print $ "yes, empty: " ++ show e
+        return s
+      Nothing -> do
+        print "no"
+        return s
+  where --readQ = atomically . tryReadTQueue
+    readQ q' = atomically $ do
+      v <- tryReadTQueue q'
+      empty' <- isEmptyTQueue q'
+      return (v, empty')
 
 writeState
   :: TQueue (StateUpdate GameState) -> P.ProcessId -> GameState -> IO ()
@@ -193,10 +196,10 @@ drawState renderer state = do
     firstPlayer = localPlayerState
     secondPlayer = remotePlayerState
 
-drawPlayer :: SDL.Renderer -> PlayerSettings -> IO ()
+drawPlayer :: SDL.Renderer -> PlayerState -> IO ()
 drawPlayer r ps =
-  drawRect r (playerPosition ps) (playerBounds ps) (playerColor ps)
+  drawRect r (playerPositionState ps) (playerBoundsState ps) (playerColorState ps)
 
-drawBall :: SDL.Renderer -> BallSettings -> IO ()
-drawBall r bs = drawCircle r (ballPosition bs) (ballRadius bs)
+drawBall :: SDL.Renderer -> BallState -> IO ()
+drawBall r bs = drawCircle r (ballPositionState bs) (ballRadiusState bs)
 

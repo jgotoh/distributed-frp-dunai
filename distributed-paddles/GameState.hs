@@ -30,37 +30,63 @@ data GameSettings = GameSettings
   deriving (Show)
 
 data PlayerSettings = PlayerSettings
-  { playerPosition :: Position
-  , playerBounds :: Bounds
-  , playerVelocity :: Velocity
-  , playerColor :: Color
+  { playerPosition0 :: Position
+  , playerBounds0 :: Bounds
+  , playerVelocityMax :: Velocity
+  , playerColor0 :: Color
   }
   deriving (Generic, Show, Typeable)
 instance Binary PlayerSettings
 
 data BallSettings = BallSettings
-  { ballPosition :: Position
-  , ballRadius :: Radius
-  , ballVelocity :: Velocity
-  , ballColor :: Color
+  { ballPosition0 :: Position
+  , ballRadius0 :: Radius
+  , ballVelocityMax :: Velocity
+  , ballColor0 :: Color
   }
   deriving (Generic, Show, Typeable)
 instance Binary BallSettings
 
+
+-- TODO aggregate state records in ADT
 data GameState = GameState
-  { localPlayerState :: PlayerSettings
-  , remotePlayerState :: PlayerSettings
-  , ballState :: BallSettings
+  { localPlayerState :: PlayerState
+  , remotePlayerState :: PlayerState
+  , ballState :: BallState
   }
   deriving (Generic, Show, Typeable)
 instance Binary GameState
 
-toShapeBall :: BallSettings -> ToShape BallSettings
-toShapeBall (BallSettings p r _ _) =
+data PlayerState = PlayerState
+  { playerPositionState :: Position
+  , playerBoundsState :: Bounds
+  , playerVelocityState :: Velocity
+  , playerColorState :: Color
+  }
+  deriving (Generic, Show, Typeable)
+instance Binary PlayerState
+
+data BallState = BallState
+  { ballPositionState :: Position
+  , ballRadiusState :: Radius
+  , ballVelocityState :: Velocity
+  , ballColorState :: Color
+  }
+  deriving (Generic, Show, Typeable)
+instance Binary BallState
+
+toBallState :: BallSettings -> BallState
+toBallState (BallSettings p r v c) = BallState p r v c
+
+toPlayerState :: PlayerSettings -> PlayerState
+toPlayerState (PlayerSettings p b v c) = PlayerState p b v c
+
+toShapeBall :: BallState -> ToShape BallState
+toShapeBall (BallState p r _ _) =
   ToShape { broadphaseShape = Sphere p r, narrowphaseShape = Sphere p r }
 
-toShapePlayer :: PlayerSettings -> ToShape PlayerSettings
-toShapePlayer (PlayerSettings p b _ _) = ToShape
+toShapePlayer :: PlayerState -> ToShape PlayerState
+toShapePlayer (PlayerState p b _ _) = ToShape
   { broadphaseShape  = Sphere center radius
   , narrowphaseShape = AABB p b
   }
