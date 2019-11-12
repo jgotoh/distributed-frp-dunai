@@ -2,7 +2,7 @@
 
 trap "trap - SIGTERM && kill -- -$BASHPID" SIGINT SIGTERM EXIT
 
-PATH_EXE=dist-newstyle/build/x86_64-linux/ghc-8.4.3/networked-frp-0.1.0.0/x/distributed-paddles/build/distributed-paddles/
+PATH_EXE=dist-newstyle/build/x86_64-linux/ghc-8.4.3/distributed-frp-dunai-0.1.0.0/x/distributed-paddles/build/distributed-paddles/
 
 SERVER=distributed-paddles
 CLIENTA=distributed-paddlesA
