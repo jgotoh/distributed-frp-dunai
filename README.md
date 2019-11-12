@@ -1,20 +1,33 @@
 # Distributed Systems Extensions for the Dunai FRP Library
 
-## simple-example
+## distributed-paddles
 
 The example needs [SDL2](https://www.libsdl.org/download-2.0.php) and [SDL2-gfx](http://www.ferzkopp.net/wordpress/2016/01/02/sdl_gfx-sdl2_gfx/) installed on the system.
 
-A P2P session can be created or joined:
+A session can be created or joined:
 
-To create a session on localhost:
-`cabal new-run exes -- --ip 127.0.0.1 --p 3000 --host`
+To create a session called `name` on localhost, port 3000:
+`cabal new-run distributed-paddles -- --host --ip 127.0.0.1 --p 3000 --name name`
 
-To join:
-`cabal new-run exes -- --ip 127.0.0.1 --p 3000`
+To join with a nickname `A`, receiving messages on port 3001:
+`cabal new-run distributed-paddles -- --ip 127.0.0.1 --p 3001 --name name --s 127.0.0.1:3000:0 --nick A`
+
+### Simple startup
+
+To run a server with `n` hosts that join, run `run_test n`, e.g `run_test 2`. 
+Running with argument 0 only starts up a server.
+
+When the server started successfully, press any key to start the clients.
+
+To exit the session, press again any key.
+
+### Profiling
+
+To automatically run a server with two hosts that join using profiling, run `run_profiling`.
 
 ## hlint
 
-This project uses `hlint` to statically check for errors.
+This project uses `hlint` to statically check for code improvements.
 
 For more information see:
 https://github.com/ndmitchell/hlint
@@ -32,10 +45,6 @@ https://github.com/ndmitchell/ghcid
 ## Formatting
 
 All Haskell source files are formatted via [Brittany](https://github.com/lspitzner/brittany/).
-
-## Profiling
-
-To visualize the profiling report, run `hp2ps -e8in -c simple-example.hp`
 
 ## network-transport-tcp
 
