@@ -1,0 +1,60 @@
+#!/bin/bash
+
+trap "trap - SIGTERM && kill -- -$BASHPID" SIGINT SIGTERM EXIT
+
+PATH_EXE=dist-newstyle/build/x86_64-linux/ghc-8.4.3/networked-frp-0.1.0.0/x/distributed-paddles/build/distributed-paddles/
+
+SERVER=distributed-paddles
+CLIENTA=distributed-paddlesA
+CLIENTB=distributed-paddlesB
+
+SERVER_PATH=${PATH_EXE}${SERVER}
+
+CLIENTA_PATH=${PATH_EXE}${CLIENTA}
+
+CLIENTB_PATH=${PATH_EXE}${CLIENTB}
+
+SERVER_HP=distributed-paddles.hp
+CLIENTA_HP=distributed-paddlesA.hp
+CLIENTB_HP=distributed-paddlesB.hp
+
+SERVER_PS=distributed-paddles.ps
+CLIENTA_PS=distributed-paddlesA.ps
+CLIENTB_PS=distributed-paddlesB.ps
+
+# Available options: https://downloads.haskell.org/~ghc/7.4.1/docs/html/users_guide/prof-heap.html#rts-options-heap-prof
+PROFILE=-hm
+
+cp $SERVER_PATH $CLIENTA_PATH
+
+cp $SERVER_PATH $CLIENTB_PATH
+
+echo $SERVER_PATH
+
+# run Server
+echo "Starting the server"
+./$SERVER_PATH +RTS -p -s $PROFILE -RTS --host --ip 127.0.0.1 --p 3000 --name name | sed "s/^/[Server] /" &
+
+# run Clients
+read -n 1 -s -r -p $'Press any key to start clients\n'
+
+PORT=3001
+echo "Starting client 1 on port $PORT"
+
+./$CLIENTA_PATH +RTS -p -s $PROFILE -RTS --ip 127.0.0.1 --p $PORT --name name --s 127.0.0.1:3000:0 --nick 1 | sed "s/^/[Client1] /" &
+
+PORT=3002
+./$CLIENTB_PATH +RTS -p -s $PROFILE -RTS --ip 127.0.0.1 --p $PORT --name name --s 127.0.0.1:3000:0 --nick 2 | sed "s/^/[Client2] /" &
+
+read -n 1 -s -r -p $'Press any key to exit\n'
+
+# convert hp to ps
+
+hp2ps -e8in -c $SERVER_HP
+hp2ps -e8in -c $CLIENTA_HP
+hp2ps -e8in -c $CLIENTB_HP
+
+rm $SERVER_HP
+rm $CLIENTA_HP
+rm $CLIENTB_HP
+
