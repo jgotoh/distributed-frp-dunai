@@ -3,19 +3,23 @@
 ## distributed-paddles
 
 `distributed-paddles` is an example application inspired by PONG&trade; (Atari Interactive, Inc., 1972).
+
 The application needs [SDL2](https://www.libsdl.org/download-2.0.php) and [SDL2-gfx](http://www.ferzkopp.net/wordpress/2016/01/02/sdl_gfx-sdl2_gfx/) installed on the system.
 
 A session can be created or joined:
 
-To create a session called `name` on localhost, port 3000:
+To create a session called `name` on localhost, port `3000`:
+
 `cabal new-run distributed-paddles -- --host --ip 127.0.0.1 --p 3000 --name name`
 
-To join with a nickname `A`, receiving messages on port 3001:
+To join with a nickname `A`, receiving messages on port `3001`:
+
 `cabal new-run distributed-paddles -- --ip 127.0.0.1 --p 3001 --name name --s 127.0.0.1:3000:0 --nick A`
 
 ### Simple startup
 
 To run a server with `n` hosts that join, run `run_test n`, e.g `run_test 2`. 
+
 Running with argument 0 only starts up a server.
 
 When the server started successfully, press any key to start the clients.
