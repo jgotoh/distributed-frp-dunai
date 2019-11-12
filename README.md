@@ -2,7 +2,8 @@
 
 ## distributed-paddles
 
-The example needs [SDL2](https://www.libsdl.org/download-2.0.php) and [SDL2-gfx](http://www.ferzkopp.net/wordpress/2016/01/02/sdl_gfx-sdl2_gfx/) installed on the system.
+`distributed-paddles` is an example application inspired by PONG&trade; (Atari Interactive, Inc., 1972).
+The application needs [SDL2](https://www.libsdl.org/download-2.0.php) and [SDL2-gfx](http://www.ferzkopp.net/wordpress/2016/01/02/sdl_gfx-sdl2_gfx/) installed on the system.
 
 A session can be created or joined:
 
