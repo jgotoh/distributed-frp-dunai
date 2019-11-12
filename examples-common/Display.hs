@@ -35,7 +35,7 @@ createWindow title width height = do
 createRenderer :: SDL.Window -> IO SDL.Renderer
 createRenderer window = do
   let rdrConfig = SDL.RendererConfig
-        { SDL.rendererType          = SDL.AcceleratedVSyncRenderer
+        { SDL.rendererType          = SDL.AcceleratedRenderer
         , SDL.rendererTargetTexture = True
         }
   SDL.createRenderer window (-1) rdrConfig

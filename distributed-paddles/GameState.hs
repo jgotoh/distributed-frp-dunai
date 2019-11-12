@@ -19,7 +19,7 @@ type BallEnv = ReaderT BallSettings
 data Collision = BoundsCollision Side | PlayerCollision
 
 data GameInput = GameInput
-  { directionInput :: Maybe Direction
+  { directionInput :: !(Maybe Direction)
   } deriving (Show)
 
 data GameSettings = GameSettings
@@ -30,23 +30,30 @@ data GameSettings = GameSettings
   deriving (Show)
 
 data PlayerSettings = PlayerSettings
-  { playerPosition0 :: Position
-  , playerBounds0 :: Bounds
-  , playerVelocityMax :: Velocity
-  , playerColor0 :: Color
+  { playerPosition0 :: !Position
+  , playerBounds0 :: !Bounds
+  , playerVelocityMax :: !Velocity
+  , playerColor0 :: !Color
   }
   deriving (Generic, Show, Typeable)
 instance Binary PlayerSettings
 
 data BallSettings = BallSettings
-  { ballPosition0 :: Position
-  , ballRadius0 :: Radius
-  , ballVelocityMax :: Velocity
-  , ballColor0 :: Color
+  { ballPosition0 :: !Position
+  , ballRadius0 :: !Radius
+  , ballVelocityMax :: !Velocity
+  , ballColor0 :: !Color
   }
   deriving (Generic, Show, Typeable)
 instance Binary BallSettings
 
+
+data NetState = NetState
+  { playerNetState :: !Direction
+  , ballNetState :: !(Maybe BallState)
+  }
+  deriving (Generic, Show, Typeable)
+instance Binary NetState
 
 -- TODO aggregate state records in ADT
 data GameState = GameState
@@ -58,19 +65,19 @@ data GameState = GameState
 instance Binary GameState
 
 data PlayerState = PlayerState
-  { playerPositionState :: Position
-  , playerBoundsState :: Bounds
-  , playerVelocityState :: Velocity
-  , playerColorState :: Color
+  { playerPositionState :: !Position
+  , playerBoundsState :: !Bounds
+  , playerVelocityState :: !Velocity
+  , playerColorState :: !Color
   }
   deriving (Generic, Show, Typeable)
 instance Binary PlayerState
 
 data BallState = BallState
-  { ballPositionState :: Position
-  , ballRadiusState :: Radius
-  , ballVelocityState :: Velocity
-  , ballColorState :: Color
+  { ballPositionState :: !Position
+  , ballRadiusState :: !Radius
+  , ballVelocityState :: !Velocity
+  , ballColorState :: !Color
   }
   deriving (Generic, Show, Typeable)
 instance Binary BallState

@@ -3,7 +3,7 @@ module Game where
 import           Collision
 import           Display
 import           GameState
-import Network.Common
+import           Network.Common
 import           Types
 
 import           Data.Maybe
@@ -37,7 +37,8 @@ edgeJust = edgeBy isJustEdge (Just undefined)
   isJustEdge (Just _) (   Just _) = Nothing
   isJustEdge (Just _) Nothing     = Nothing
 
-gameSF :: (Monad m, MonadFix m) => SF (GameEnv m) (GameInput, (Maybe (StateUpdate GameState))) GameState
+-- executed by host that creates a session
+gameSF :: (Monad m, MonadFix m) => SF (GameEnv m) (GameInput, (Maybe (StateUpdate NetState))) GameState
 gameSF = feedbackM act loopingGame
  where
   act = do
@@ -48,7 +49,8 @@ gameSF = feedbackM act loopingGame
   bs0 = toBallState . ballSettings
   rps0 = toPlayerState . remotePlayerSettings
 
-remoteGameSF :: (Monad m, MonadFix m) => SF (GameEnv m) (GameInput, (Maybe (StateUpdate GameState))) GameState
+-- executed by host that joins a session
+remoteGameSF :: (Monad m, MonadFix m) => SF (GameEnv m) (GameInput, (Maybe (StateUpdate NetState))) GameState
 remoteGameSF = feedbackM act remoteLoopingGame
  where
   act = do
@@ -60,24 +62,25 @@ remoteGameSF = feedbackM act remoteLoopingGame
   rps0 = toPlayerState . remotePlayerSettings
 
 loopingGame
-  :: (Monad m) => SF (GameEnv m) ((GameInput, (Maybe (StateUpdate GameState))), GameState) (GameState, GameState)
+  :: (Monad m) => SF (GameEnv m) ((GameInput, (Maybe (StateUpdate NetState))), GameState) (GameState, GameState)
 loopingGame =
   (arr gi_gs >>> morphS (selectEnv localPlayerSettings) localPlayerSF)
     &&& (arr su_gs >>> morphS (selectEnv remotePlayerSettings) remotePlayerSF)
-    &&& (arr gi_gs >>> morphS (selectEnv ballSettings) ballSF)
+    &&& (arr gs >>> morphS (selectEnv ballSettings) ballSF)
     >>> arr (\(ps, (ps', bs)) -> ((ps, ps'), bs))
     >>> arr ((uncurry . uncurry) GameState)
     >>> arr dup
   where
-    gi_gs ((gi, _), gs) = (gi, gs)
-    su_gs ((_, s), gs)= (s, gs)
+    gi_gs ((gi, _), gs') = (gi, gs')
+    su_gs ((_, s), gs')= (s, gs')
+    gs (_, gs') = gs'
 
 remoteLoopingGame
-  :: (Monad m) => SF (GameEnv m) ((GameInput, (Maybe (StateUpdate GameState))), GameState) (GameState, GameState)
+  :: (Monad m) => SF (GameEnv m) ((GameInput, (Maybe (StateUpdate NetState))), GameState) (GameState, GameState)
 remoteLoopingGame =
   (arr gi_gs >>> morphS (selectEnv localPlayerSettings) localPlayerSF)
     &&& (arr su_gs >>> morphS (selectEnv remotePlayerSettings) remotePlayerSF)
-  -- TODO unit test su is Nothing -> static remote ball/ player
+  -- TODO unit test when StateUpdate is Nothing -> remote ball/ player are static
     &&& (arr su_gs >>> morphS (selectEnv ballSettings) remoteBallSF)
     >>> arr (\(ps, (ps', bs)) -> ((ps, ps'), bs))
     >>> arr ((uncurry . uncurry) GameState)
@@ -94,31 +97,37 @@ localPlayerSF
   :: (Monad m) => SF (PlayerEnv m) (GameInput, a) PlayerState
 localPlayerSF = arr fst >>> arr directionInput >>> paddleSF
 
-remotePlayerSF :: (Monad m) => SF (PlayerEnv m) ((Maybe (StateUpdate GameState)), a) PlayerState
+remotePlayerSF :: (Monad m) => SF (PlayerEnv m) ((Maybe (StateUpdate NetState)), a) PlayerState
 remotePlayerSF = arr fst >>> arr (fmap getDir) >>> paddleSF
-  where getDir (StateUpdate _ gs) = SDL.Vect.normalize (playerVelocityState . localPlayerState $ gs)
+  where getDir (StateUpdate _ s) = playerNetState s
 
 arrTrace :: (Monad m, Show a) => MSF m a a
 arrTrace = arr (\x -> trace (show x) x)
 
-ballSF :: (Monad m) => SF (BallEnv m) (a, GameState) BallState
-ballSF = second resolveCollisions >>> feedback ballDir0 movingBallSF
+ballSF :: (Monad m) => SF (BallEnv m) GameState BallState
+ballSF = resolveCollisions >>> feedback ballDir0 movingBallSF
   where
-    -- TODO replace ballDir0 with feedbackM usage! create BallState adt
+    -- TODO replace ballDir0 with feedbackM usage!
         ballDir0 = V2 (-0.75) $ -0.12
 
-remoteBallSF :: (Monad m) => SF (BallEnv m) ((Maybe (StateUpdate GameState)), GameState) BallState
-remoteBallSF = second resolveCollisions >>> arr id >>> feedback ballDir0 movingBallSF
-  -- TODO combine su with gs
-  where
-    ballDir0 = V2 0 0
+-- TODO remoteMovingBall (possible to return state directly?)
+remoteBallSF :: Monad m => SF (BallEnv m) ((Maybe (StateUpdate NetState)), GameState) BallState
+remoteBallSF = arr (uncurry mergeStates) >>> arr ballState
+
+mergeStates :: Maybe (StateUpdate NetState) -> GameState -> GameState
+mergeStates mNS gs = case mNS of
+  Nothing -> gs
+  Just (StateUpdate _ ns) -> case ns of
+    NetState _ bs -> case bs of
+      Just bs' -> gs{ballState=bs'}
+      Nothing -> gs
 
 resolveCollisions :: Monad m => SF (BallEnv m) GameState [Event Collision]
 resolveCollisions =
   (arr ballState >>> boundsCollisionSF)
     &&& (arr localPlayerState &&& arr ballState >>> playerCollisionSF)
     -- &&& (arr remotePlayerState &&& arr ballState >>> playerCollisionSF)
-    >>> arr (uncurry (++)) --foldColl --
+    >>> arr (uncurry (++))
 
 -- edge avoids multiple events for a single collision -> TODO create test
 playerCollisionSF
@@ -156,9 +165,9 @@ movingBallSF
   :: Monad m
   => SF
        (BallEnv m)
-       ((a, Collisions Collision), Direction)
+       (Collisions Collision, Direction)
        (BallState, Direction)
-movingBallSF = proc ((_, cs), dir) -> do
+movingBallSF = proc (cs, dir) -> do
   c      <- morphS bsToPs colorSF -< undefined
   dir'   <- collisionSF -< (dir, cs)
   (p, v) <- morphS bsToPs moveSF -< Just dir'

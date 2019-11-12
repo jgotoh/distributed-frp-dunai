@@ -52,39 +52,40 @@ library examples-common
                        sdl2-gfx,
                        text
 
-executable simple-example
-  main-is:             Main.hs
-  other-modules:       Game, GameState
-  --ghc-options:         
-  --                     -fprof-auto
-  --                     "-with-rtsopts=-p -s -hd"
-  -- other-extensions:
-  build-depends:       base,
-                       bearriver,
-                       bytestring,
-                       distributed-process,
-                       distributed-process-client-server,
-                       distributed-process-extras,
-                       dunai,
-                       exceptions,
-                       examples-common,
-                       monadIO,
-                       mtl,
-                       network,
-                       networked-frp,
-                       sdl2,
-                       stm,
-                       transformers-base
-  hs-source-dirs:      simple-example
-  default-language:    Haskell2010
-  default-extensions:  Arrows
+-- temporarily deactivated because of compile erros
+--executable simple-example
+--  main-is:             Main.hs
+--  other-modules:       Game, GameState
+--  --ghc-options:         
+--  --                     -fprof-auto
+--  --                     "-with-rtsopts=-p -s -hd"
+-- other-extensions:
+-- build-depends:       base,
+--                       bearriver,
+--                       bytestring,
+--                       distributed-process,
+--                       distributed-process-client-server,
+--                       distributed-process-extras,
+--                       dunai,
+--                       exceptions,
+--                       examples-common,
+--                       monadIO,
+--                       mtl,
+--                       network,
+--                       networked-frp,
+--                       sdl2,
+--                       stm,
+--                       transformers-base
+--  hs-source-dirs:      simple-example
+--  default-language:    Haskell2010
+--  default-extensions:  Arrows
 
 executable distributed-paddles
   main-is:             Main.hs
   other-modules:       Game, GameState
---  ghc-options:         -prof
---                       -fprof-auto
---                       "-with-rtsopts=-p -s -hd -xc"
+  ghc-options:         -prof
+                       -fprof-auto
+--                       "-with-rtsopts=-p -s -hd "
   build-depends:       base,
                        bearriver,
                        binary,

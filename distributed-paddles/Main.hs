@@ -13,7 +13,7 @@ import           Types
 
 import           Control.Applicative
 --import           Control.Exception
---import           Control.Concurrent
+import           Control.Concurrent
 import           Control.Concurrent.STM.TQueue
 import           Control.Concurrent.STM.TMVar
 import qualified Control.Distributed.Process   as P
@@ -29,6 +29,7 @@ import qualified SDL
 import           System.IO
 import           System.Exit
 
+
 main :: IO ()
 main = do
   -- flush output on every newline to support output stream editing via sed
@@ -36,7 +37,6 @@ main = do
   hSetBuffering stdout LineBuffering
 
   cfg <- parseConfig
-
 
   print cfg
 
@@ -47,12 +47,10 @@ main = do
       ip
       (show port)
       name
-      (serverProcessDef :: ServerProcessDefinition GameState)
+      (serverProcessDef :: ServerProcessDefinition NetState)
     GameConfig -> undefined
 
-clientMain :: Show a =>
-  String
-  -> a -> String -> String -> String -> IO ()
+clientMain :: Show a => String -> a -> String -> String -> String -> IO ()
 clientMain ip port nick name serverAddr = do
   (window, renderer) <- initializeSDL "distributed-paddles"
   timeRef            <- createTimeRef
@@ -65,8 +63,8 @@ clientMain ip port nick name serverAddr = do
       mServer <- runProcessResult node (searchForServer name serverAddr)
 
       case mServer of
-        Nothing -> error "Server could not be found"
-        Just (Nothing) -> error "Server could not be found"
+        Nothing            -> error "Server could not be found"
+        Just (Nothing    ) -> error "Server could not be found"
         Just (Just server) -> do
 
           print "Found Server"
@@ -77,7 +75,7 @@ clientMain ip port nick name serverAddr = do
               server
               nick
               (createServerStateChannel :: P.Process
-                  (ServerStateChannel GameState)
+                  (ServerStateChannel NetState)
               )
             )
 
@@ -91,19 +89,18 @@ clientMain ip port nick name serverAddr = do
               Right (JoinAccepted cs) -> do
 
                 if null cs
-                  then
-                       reactimateNet' (return $ GameInput Nothing)
-                                     (sense timeRef)
-                                     (actuate renderer)
-                                     (runGameReader firstGS gameSF)
-                                     (receiveState rQ)
-                                     (writeState sQ pid)
+                  then reactimateNet' (return $ GameInput Nothing)
+                                      (sense timeRef)
+                                      (actuate renderer)
+                                      (runGameReader firstGS gameSF)
+                                      (receiveState rQ)
+                                      (writeState (hostANetState) sQ pid)
                   else reactimateNet' (return $ GameInput Nothing)
-                                     (sense timeRef)
-                                     (actuate renderer)
-                                     (runGameReader secondGS remoteGameSF)
-                                     (receiveState rQ)
-                                     (writeState sQ pid)
+                                      (sense timeRef)
+                                      (actuate renderer)
+                                      (runGameReader secondGS remoteGameSF)
+                                      (receiveState rQ)
+                                      (writeState (hostBNetState) sQ pid)
 
           quit window renderer
  where
@@ -112,36 +109,40 @@ clientMain ip port nick name serverAddr = do
                                (SDL.V2 0 175)
                                firstPlayerColor
   ball = BallSettings (SDL.V2 200 150) 4 (SDL.V2 350 350) firstPlayerColor
-  firstGS = GameSettings firstPlayer secondPlayer ball
+  firstGS          = GameSettings firstPlayer secondPlayer ball
   firstPlayerColor = SDL.V4 240 142 125 255
-  secondPlayer = PlayerSettings (SDL.V2 300 100) (SDL.V2 10 50) (SDL.V2 0 175) firstPlayerColor
+  secondPlayer     = PlayerSettings (SDL.V2 300 100)
+                                    (SDL.V2 10 50)
+                                    (SDL.V2 0 175)
+                                    firstPlayerColor
   secondGS = GameSettings secondPlayer firstPlayer ball
 
+hostANetState :: GameState -> NetState
+hostANetState gs = NetState dir ball
+ where
+  dir  = SDL.normalize (playerVelocityState . localPlayerState $ gs)
+  ball = Nothing
+
+hostBNetState :: GameState -> NetState
+hostBNetState gs = NetState dir Nothing
+  where dir = SDL.normalize (playerVelocityState . localPlayerState $ gs)
+
 receiveState
-  :: TQueue (StateUpdate GameState) -> IO (Maybe (StateUpdate GameState))
-receiveState q = readQ q >>= \(s, e) -> do
-    case s of
-      Just _ -> do
-        print $ "yes, empty: " ++ show e
-        return s
-      Nothing -> do
-        print "no"
-        return s
-  where --readQ = atomically . tryReadTQueue
-    readQ q' = atomically $ do
-      v <- tryReadTQueue q'
-      empty' <- isEmptyTQueue q'
-      return (v, empty')
+  :: TQueue (StateUpdate NetState) -> IO (Maybe (StateUpdate NetState))
+receiveState q = readQ q where readQ = atomically . tryReadTQueue
 
 writeState
-  :: TQueue (StateUpdate GameState) -> P.ProcessId -> GameState -> IO ()
-writeState q pid gs = atomically $ writeTQueue q $ StateUpdate pid gs
+  :: (GameState -> NetState)
+  -> TQueue (StateUpdate NetState)
+  -> P.ProcessId
+  -> GameState
+  -> IO ()
+writeState f q pid gs = do
+  -- TODO replace with sending network output states at a fixed rate (see FRP2016 paper)
+  threadDelay 10000
+  atomically $ writeTQueue q $ StateUpdate pid $ f gs
 
-runGameReader
-  :: Monad m
-  => GameSettings
-  -> SF (GameEnv m) a b
-  -> SF m a b
+runGameReader :: Monad m => GameSettings -> SF (GameEnv m) a b -> SF m a b
 runGameReader gs sf = readerS $ runReaderS_ (runReaderS sf) gs
 
 actuate :: SDL.Renderer -> p -> GameState -> IO Bool
@@ -153,6 +154,7 @@ sense timeRef _ = do
   events <- SDL.pollEvents
   when (quitEvent events) exitSuccess
   dir <- direction
+  --print $ "dt: " ++ show dtSecs
   return (dtSecs, Just $ GameInput dir)
   where quitEvent events = elem SDL.QuitEvent $ map SDL.eventPayload events
 
@@ -192,13 +194,15 @@ drawState renderer state = do
   drawPlayer renderer $ secondPlayer state
   drawBall renderer $ ballState state
   drawCircle renderer (SDL.V2 0 0) 30
-  where
-    firstPlayer = localPlayerState
-    secondPlayer = remotePlayerState
+ where
+  firstPlayer  = localPlayerState
+  secondPlayer = remotePlayerState
 
 drawPlayer :: SDL.Renderer -> PlayerState -> IO ()
-drawPlayer r ps =
-  drawRect r (playerPositionState ps) (playerBoundsState ps) (playerColorState ps)
+drawPlayer r ps = drawRect r
+                           (playerPositionState ps)
+                           (playerBoundsState ps)
+                           (playerColorState ps)
 
 drawBall :: SDL.Renderer -> BallState -> IO ()
 drawBall r bs = drawCircle r (ballPositionState bs) (ballRadiusState bs)
