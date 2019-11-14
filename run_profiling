@@ -2,7 +2,12 @@
 
 trap "trap - SIGTERM && kill -- -$BASHPID" SIGINT SIGTERM EXIT
 
-PATH_EXE=dist-newstyle/build/x86_64-linux/ghc-8.4.3/distributed-frp-dunai-0.1.0.0/x/distributed-paddles/build/distributed-paddles/
+# PATH_EXE needs to point to the exes built by Cabal.
+# Profiling in Haskell does not support specifying output files.
+# Running a profiled program called x always writes its output to x.hp.
+# The workaround used here is to execute different copies of the executable.
+
+PATH_EXE=dist-newstyle/build/x86_64-linux/ghc-8.2.1/distributed-frp-dunai-0.1.0.0/x/distributed-paddles/build/distributed-paddles/
 
 SERVER=distributed-paddles
 CLIENTA=distributed-paddlesA
@@ -23,7 +28,7 @@ CLIENTA_PS=distributed-paddlesA.ps
 CLIENTB_PS=distributed-paddlesB.ps
 
 # Available options: https://downloads.haskell.org/~ghc/7.4.1/docs/html/users_guide/prof-heap.html#rts-options-heap-prof
-PROFILE=-hm
+PROFILE=-hr
 
 cp $SERVER_PATH $CLIENTA_PATH
 
