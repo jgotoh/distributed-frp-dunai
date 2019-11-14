@@ -82,7 +82,6 @@ executable distributed-paddles
   other-modules:       Game, GameState
 --  ghc-options:         -prof
 --                       -fprof-auto
---                       "-with-rtsopts=-p -s -hd "
   build-depends:       base,
                        bearriver,
                        binary,

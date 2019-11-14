@@ -2,6 +2,11 @@
 
 trap "trap - SIGTERM && kill -- -$BASHPID" SIGINT SIGTERM EXIT
 
+# Convenience script to execute distributed paddles with a server and two hosts using profiling.
+# To build the applicaion with profiling, enable ghc-options "-prof" and "-fprof-auto" in distributed-frp-dunai.cabal
+# Also the file cabal.project.local may be modified to contain the following line
+# profiling: True
+
 # PATH_EXE needs to point to the exes built by Cabal.
 # Profiling in Haskell does not support specifying output files.
 # Running a profiled program called x always writes its output to x.hp.
