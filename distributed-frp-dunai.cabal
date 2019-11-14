@@ -80,8 +80,8 @@ library examples-common
 executable distributed-paddles
   main-is:             Main.hs
   other-modules:       Game, GameState
-  ghc-options:         -prof
-                       -fprof-auto
+--  ghc-options:         -prof
+--                       -fprof-auto
 --                       "-with-rtsopts=-p -s -hd "
   build-depends:       base,
                        bearriver,
