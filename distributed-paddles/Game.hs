@@ -110,7 +110,6 @@ ballSF = resolveCollisions >>> feedback ballDir0 movingBallSF
     -- TODO replace ballDir0 with feedbackM usage!
         ballDir0 = V2 (-0.75) $ -0.12
 
--- TODO remoteMovingBall (possible to return state directly?)
 remoteBallSF :: Monad m => SF (BallEnv m) ((Maybe (StateUpdate NetState)), GameState) BallState
 remoteBallSF = arr (uncurry mergeStates) >>> arr ballState
 

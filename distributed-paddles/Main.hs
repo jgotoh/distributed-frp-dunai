@@ -121,7 +121,7 @@ hostANetState :: GameState -> NetState
 hostANetState gs = NetState dir ball
  where
   dir  = SDL.normalize (playerVelocityState . localPlayerState $ gs)
-  ball = Nothing
+  ball = Just $ ballState gs
 
 hostBNetState :: GameState -> NetState
 hostBNetState gs = NetState dir Nothing
