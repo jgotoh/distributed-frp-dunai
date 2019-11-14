@@ -43,6 +43,7 @@ data BallSettings = BallSettings
   , ballRadius0 :: !Radius
   , ballVelocityMax :: !Velocity
   , ballColor0 :: !Color
+  , ballDirection0 :: !Direction
   }
   deriving (Generic, Show, Typeable)
 instance Binary BallSettings
@@ -83,7 +84,7 @@ data BallState = BallState
 instance Binary BallState
 
 toBallState :: BallSettings -> BallState
-toBallState (BallSettings p r v c) = BallState p r v c
+toBallState (BallSettings p r v c _) = BallState p r v c
 
 toPlayerState :: PlayerSettings -> PlayerState
 toPlayerState (PlayerSettings p b v c) = PlayerState p b v c

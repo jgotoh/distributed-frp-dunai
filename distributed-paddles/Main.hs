@@ -108,7 +108,7 @@ clientMain ip port nick name serverAddr = do
                                (SDL.V2 10 50)
                                (SDL.V2 0 175)
                                firstPlayerColor
-  ball = BallSettings (SDL.V2 200 150) 4 (SDL.V2 350 350) firstPlayerColor
+  ball = BallSettings (SDL.V2 200 150) 4 (SDL.V2 350 350) firstPlayerColor (SDL.V2 (-0.75) $ -0.12)
   firstGS          = GameSettings firstPlayer secondPlayer ball
   firstPlayerColor = SDL.V4 240 142 125 255
   secondPlayer     = PlayerSettings (SDL.V2 300 100)

@@ -38,31 +38,39 @@ edgeJust = edgeBy isJustEdge (Just undefined)
   isJustEdge (Just _) Nothing     = Nothing
 
 -- executed by host that creates a session
-gameSF :: (Monad m, MonadFix m) => SF (GameEnv m) (GameInput, (Maybe (StateUpdate NetState))) GameState
+gameSF
+  :: (Monad m, MonadFix m)
+  => SF (GameEnv m) (GameInput, (Maybe (StateUpdate NetState))) GameState
 gameSF = feedbackM act loopingGame
  where
   act = do
     gs <- lift ask
     return (toState gs)
   toState gs = GameState (ps0 gs) (rps0 gs) (bs0 gs)
-  ps0 = toPlayerState . localPlayerSettings
-  bs0 = toBallState . ballSettings
+  ps0  = toPlayerState . localPlayerSettings
+  bs0  = toBallState . ballSettings
   rps0 = toPlayerState . remotePlayerSettings
 
 -- executed by host that joins a session
-remoteGameSF :: (Monad m, MonadFix m) => SF (GameEnv m) (GameInput, (Maybe (StateUpdate NetState))) GameState
+remoteGameSF
+  :: (Monad m, MonadFix m)
+  => SF (GameEnv m) (GameInput, (Maybe (StateUpdate NetState))) GameState
 remoteGameSF = feedbackM act remoteLoopingGame
  where
   act = do
     gs <- lift ask
     return (toState gs)
   toState gs = GameState (ps0 gs) (rps0 gs) (bs0 gs)
-  ps0 = toPlayerState . localPlayerSettings
-  bs0 = toBallState . ballSettings
+  ps0  = toPlayerState . localPlayerSettings
+  bs0  = toBallState . ballSettings
   rps0 = toPlayerState . remotePlayerSettings
 
 loopingGame
-  :: (Monad m) => SF (GameEnv m) ((GameInput, (Maybe (StateUpdate NetState))), GameState) (GameState, GameState)
+  :: (Monad m)
+  => SF
+       (GameEnv m)
+       ((GameInput, (Maybe (StateUpdate NetState))), GameState)
+       (GameState, GameState)
 loopingGame =
   (arr gi_gs >>> morphS (selectEnv localPlayerSettings) localPlayerSF)
     &&& (arr su_gs >>> morphS (selectEnv remotePlayerSettings) remotePlayerSF)
@@ -70,13 +78,17 @@ loopingGame =
     >>> arr (\(ps, (ps', bs)) -> ((ps, ps'), bs))
     >>> arr ((uncurry . uncurry) GameState)
     >>> arr dup
-  where
-    gi_gs ((gi, _), gs') = (gi, gs')
-    su_gs ((_, s), gs')= (s, gs')
-    gs (_, gs') = gs'
+ where
+  gi_gs ((gi, _), gs') = (gi, gs')
+  su_gs ((_, s), gs') = (s, gs')
+  gs (_, gs') = gs'
 
 remoteLoopingGame
-  :: (Monad m) => SF (GameEnv m) ((GameInput, (Maybe (StateUpdate NetState))), GameState) (GameState, GameState)
+  :: (Monad m)
+  => SF
+       (GameEnv m)
+       ((GameInput, (Maybe (StateUpdate NetState))), GameState)
+       (GameState, GameState)
 remoteLoopingGame =
   (arr gi_gs >>> morphS (selectEnv localPlayerSettings) localPlayerSF)
     &&& (arr su_gs >>> morphS (selectEnv remotePlayerSettings) remotePlayerSF)
@@ -85,19 +97,21 @@ remoteLoopingGame =
     >>> arr (\(ps, (ps', bs)) -> ((ps, ps'), bs))
     >>> arr ((uncurry . uncurry) GameState)
     >>> arr dup
-  where
-    gi_gs ((gi, _), gs) = (gi, gs)
-    su_gs ((_, s), gs)= (s, gs)
+ where
+  gi_gs ((gi, _), gs) = (gi, gs)
+  su_gs ((_, s), gs) = (s, gs)
 
 selectEnv
   :: (GameSettings -> a) -> ClockInfo (ReaderT a m) c -> ClockInfo (GameEnv m) c
 selectEnv f = mapReaderT $ withReaderT f
 
-localPlayerSF
-  :: (Monad m) => SF (PlayerEnv m) (GameInput, a) PlayerState
+localPlayerSF :: (Monad m) => SF (PlayerEnv m) (GameInput, a) PlayerState
 localPlayerSF = arr fst >>> arr directionInput >>> paddleSF
 
-remotePlayerSF :: (Monad m) => SF (PlayerEnv m) ((Maybe (StateUpdate NetState)), a) PlayerState
+-- Problem: is simulating the remotePlayer instead of just visualizing its state
+remotePlayerSF
+  :: (Monad m)
+  => SF (PlayerEnv m) ((Maybe (StateUpdate NetState)), a) PlayerState
 remotePlayerSF = arr fst >>> arr (fmap getDir) >>> paddleSF
   where getDir (StateUpdate _ s) = playerNetState s
 
@@ -105,28 +119,29 @@ arrTrace :: (Monad m, Show a) => MSF m a a
 arrTrace = arr (\x -> trace (show x) x)
 
 ballSF :: (Monad m) => SF (BallEnv m) GameState BallState
-ballSF = resolveCollisions >>> feedback ballDir0 movingBallSF
-  where
-    -- TODO replace ballDir0 with feedbackM usage!
-        ballDir0 = V2 (-0.75) $ -0.12
+ballSF =
+  resolveCollisions >>> feedbackM (lift $ asks ballDirection0) movingBallSF
 
-remoteBallSF :: Monad m => SF (BallEnv m) ((Maybe (StateUpdate NetState)), GameState) BallState
+remoteBallSF
+  :: Monad m
+  => SF (BallEnv m) ((Maybe (StateUpdate NetState)), GameState) BallState
 remoteBallSF = arr (uncurry mergeStates) >>> arr ballState
 
 mergeStates :: Maybe (StateUpdate NetState) -> GameState -> GameState
 mergeStates mNS gs = case mNS of
-  Nothing -> gs
+  Nothing                 -> gs
   Just (StateUpdate _ ns) -> case ns of
     NetState _ bs -> case bs of
-      Just bs' -> gs{ballState=bs'}
-      Nothing -> gs
+      Just bs' -> gs { ballState = bs' }
+      Nothing  -> gs
 
 resolveCollisions :: Monad m => SF (BallEnv m) GameState [Event Collision]
 resolveCollisions =
   (arr ballState >>> boundsCollisionSF)
     &&& (arr localPlayerState &&& arr ballState >>> playerCollisionSF)
-    -- &&& (arr remotePlayerState &&& arr ballState >>> playerCollisionSF)
-    >>> arr (uncurry (++))
+    &&& (arr remotePlayerState &&& arr ballState >>> playerCollisionSF)
+    >>> second (arr $ uncurry (++))
+    >>> (arr $ uncurry (++))
 
 -- edge avoids multiple events for a single collision -> TODO create test
 playerCollisionSF
@@ -146,35 +161,18 @@ boundsCollisionSF =
     >>> arr (fmap BoundsCollision)
     >>> arr pure
 
-collisionSF
-  :: Monad m => SF (BallEnv m) (Direction, Collisions Collision) Direction
-collisionSF = arr (\(dir, cs) -> foldl applyCollision dir (cs' cs))
- where
-  applyCollision dir c = case c of
-    PlayerCollision      -> dir * V2 (-1) 1
-    BoundsCollision side -> dir * dirChange side
-  cs' cs = fromEvent <$> filter isEvent cs
-  dirChange side = case side of
-    TopSide    -> V2 1 (-1)
-    BottomSide -> V2 1 (-1)
-    LeftSide   -> V2 (-1) 1
-    RightSide  -> V2 (-1) 1
-
 movingBallSF
   :: Monad m
-  => SF
-       (BallEnv m)
-       (Collisions Collision, Direction)
-       (BallState, Direction)
+  => SF (BallEnv m) (Collisions Collision, Direction) (BallState, Direction)
 movingBallSF = proc (cs, dir) -> do
   c      <- morphS bsToPs colorSF -< undefined
-  dir'   <- collisionSF -< (dir, cs)
+  dir'   <- applyCollisionSF -< (dir, cs)
   (p, v) <- morphS bsToPs moveSF -< Just dir'
   b      <- constM (lift $ asks ballRadius0) -< undefined
   returnA -< (BallState p b v c, dir')
  where
   bsToPs = mapReaderT $ withReaderT ps
-  ps (BallSettings p b v c) = PlayerSettings p (V2 b b) v c
+  ps (BallSettings p b v c _) = PlayerSettings p (V2 b b) v c
 
 paddleSF :: Monad m => SF (PlayerEnv m) (Maybe Direction) PlayerState
 paddleSF = proc dir -> do
@@ -192,6 +190,20 @@ moveSF = proc dir -> do
   dp   <- integral -< v'
   p'   <- arr (uncurry (+)) -< (p0, dp)
   returnA -< (p', v')
+
+applyCollisionSF
+  :: Monad m => SF (BallEnv m) (Direction, Collisions Collision) Direction
+applyCollisionSF = arr (\(dir, cs) -> foldl applyCollision dir (cs' cs))
+ where
+  applyCollision dir c = case c of
+    PlayerCollision      -> dir * V2 (-1) 1
+    BoundsCollision side -> dir * dirChange side
+  cs' cs = fromEvent <$> filter isEvent cs
+  dirChange side = case side of
+    TopSide    -> V2 1 (-1)
+    BottomSide -> V2 1 (-1)
+    LeftSide   -> V2 (-1) 1
+    RightSide  -> V2 (-1) 1
 
 colorSF :: Monad m => SF (PlayerEnv m) a Color
 colorSF = constM (lift $ asks playerColor0)
