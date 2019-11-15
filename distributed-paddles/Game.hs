@@ -37,6 +37,10 @@ edgeJust = edgeBy isJustEdge (Just undefined)
   isJustEdge (Just _) (   Just _) = Nothing
   isJustEdge (Just _) Nothing     = Nothing
 
+-- TODO move
+arrTrace :: (Monad m, Show a) => MSF m a a
+arrTrace = arr (\x -> trace (show x) x)
+
 -- executed by host that creates a session
 gameSF
   :: (Monad m, MonadFix m)
@@ -108,15 +112,17 @@ selectEnv f = mapReaderT $ withReaderT f
 localPlayerSF :: (Monad m) => SF (PlayerEnv m) (GameInput, a) PlayerState
 localPlayerSF = arr fst >>> arr directionInput >>> paddleSF
 
--- Problem: is simulating the remotePlayer instead of just visualizing its state
 remotePlayerSF
   :: (Monad m)
-  => SF (PlayerEnv m) ((Maybe (StateUpdate NetState)), a) PlayerState
-remotePlayerSF = arr fst >>> arr (fmap getDir) >>> paddleSF
-  where getDir (StateUpdate _ s) = playerNetState s
+  => SF (PlayerEnv m) ((Maybe (StateUpdate NetState)), GameState) PlayerState
+remotePlayerSF = arr (uncurry mergePlayerState) >>> arr remotePlayerState
 
-arrTrace :: (Monad m, Show a) => MSF m a a
-arrTrace = arr (\x -> trace (show x) x)
+-- if StateUpdate is Nothing, use last GameState, otherwise update it
+mergePlayerState :: Maybe (StateUpdate NetState) -> GameState -> GameState
+mergePlayerState mNS gs = case mNS of
+  Nothing -> gs
+  Just (StateUpdate _ ns) -> case ns of
+    NetState ps _ -> gs {remotePlayerState = ps}
 
 ballSF :: (Monad m) => SF (BallEnv m) GameState BallState
 ballSF =
@@ -127,6 +133,7 @@ remoteBallSF
   => SF (BallEnv m) ((Maybe (StateUpdate NetState)), GameState) BallState
 remoteBallSF = arr (uncurry mergeStates) >>> arr ballState
 
+-- if StateUpdate is Nothing, use last GameState, otherwise update it
 mergeStates :: Maybe (StateUpdate NetState) -> GameState -> GameState
 mergeStates mNS gs = case mNS of
   Nothing                 -> gs

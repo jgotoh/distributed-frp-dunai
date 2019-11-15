@@ -48,21 +48,22 @@ startClientProcess
 startClientProcess node server nick sChanP = do
   sQueue <- newTQueueIO
   rQueue <- newTQueueIO
-  rVar <- newEmptyTMVarIO
+  rVar   <- newEmptyTMVarIO
   pid    <- Node.forkProcess node $ catch
     (do
-        ServerStateChannel sp rp <- sChanP
-        joinResult <- sendJoinRequest server nick sp
+      ServerStateChannel sp rp <- sChanP
+      joinResult               <- sendJoinRequest server nick sp
 
-        P.liftIO . atomically $ putTMVar rVar joinResult
+      P.liftIO . atomically $ putTMVar rVar joinResult
 
-        case joinResult of
-          JoinRequestResult r -> case r of
-            Left err -> do
-              P.liftIO $ print err
-            Right acc -> do
-              P.liftIO $ print $ "join successful: " ++ show acc
-              clientProcess node server rp rQueue sQueue)
+      case joinResult of
+        JoinRequestResult r -> case r of
+          Left err -> do
+            P.liftIO $ print err
+          Right acc -> do
+            P.liftIO $ print $ "join successful: " ++ show acc
+            clientProcess node server rp rQueue sQueue
+    )
     (\e -> P.liftIO $ print $ show (e :: SomeException))
   return $ (Client pid sQueue rQueue, rVar) -- return $ (Client _, CurrentState)
 
@@ -82,10 +83,8 @@ clientProcess node server rp rQueue sQueue = do
   case server of
     Server pid -> P.link pid
 
-  inPid <- P.liftIO
-    $ Node.forkProcess node (receiveStateProcess rQueue rp)
-  outPid <- P.liftIO
-    $ Node.forkProcess node (sendStateProcess sQueue server)
+  inPid  <- P.liftIO $ Node.forkProcess node (receiveStateProcess rQueue rp)
+  outPid <- P.liftIO $ Node.forkProcess node (sendStateProcess sQueue server (Time.milliSeconds 30))
 
   P.link inPid
   P.link outPid
@@ -146,11 +145,16 @@ receiveStateProcess q p =
 
 -- Process to send StateUpdates to the server
 sendStateProcess
-  :: (Binary a, Typeable a) => TQueue (StateUpdate a) -> Server -> P.Process ()
-sendStateProcess q s = forever $ readQ q >>= sendState
+  :: (Binary a, Typeable a) => TQueue (StateUpdate a) -> Server -> CommandRate -> P.Process ()
+sendStateProcess q s r = forever $ delay >> readQ q >>= sendState
  where
-  readQ     = P.liftIO . atomically . readTQueue
-  sendState = clientUpdate s
+  readQ q' = P.liftIO . atomically $ do
+    xs <- flushTQueue q'
+    return xs
+  -- TODO sendState currently only sends the newest state
+  sendState (x : xs) = clientUpdate s x
+  sendState ([]    ) = return ()
+  delay = P.liftIO $ threadDelay (Time.asTimeout r)
 
 -- send a JoinRequest that contains the client's nickname and the SendPort to receive simulation state updates
 sendJoinRequest

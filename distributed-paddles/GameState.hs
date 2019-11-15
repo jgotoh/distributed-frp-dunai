@@ -50,7 +50,7 @@ instance Binary BallSettings
 
 
 data NetState = NetState
-  { playerNetState :: !Direction
+  { playerNetState :: !PlayerState
   , ballNetState :: !(Maybe BallState)
   }
   deriving (Generic, Show, Typeable)

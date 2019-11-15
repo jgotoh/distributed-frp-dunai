@@ -108,7 +108,11 @@ clientMain ip port nick name serverAddr = do
                                (SDL.V2 10 50)
                                (SDL.V2 0 175)
                                firstPlayerColor
-  ball = BallSettings (SDL.V2 200 150) 4 (SDL.V2 350 350) firstPlayerColor (SDL.V2 (-0.75) $ -0.12)
+  ball = BallSettings (SDL.V2 200 150)
+                      4
+                      (SDL.V2 350 350)
+                      firstPlayerColor
+                      (SDL.V2 (-0.75) $ -0.12)
   firstGS          = GameSettings firstPlayer secondPlayer ball
   firstPlayerColor = SDL.V4 240 142 125 255
   secondPlayer     = PlayerSettings (SDL.V2 300 100)
@@ -118,14 +122,13 @@ clientMain ip port nick name serverAddr = do
   secondGS = GameSettings secondPlayer firstPlayer ball
 
 hostANetState :: GameState -> NetState
-hostANetState gs = NetState dir ball
+hostANetState gs = NetState ps ball
  where
-  dir  = SDL.normalize (playerVelocityState . localPlayerState $ gs)
+  ps   = localPlayerState gs
   ball = Just $ ballState gs
 
 hostBNetState :: GameState -> NetState
-hostBNetState gs = NetState dir Nothing
-  where dir = SDL.normalize (playerVelocityState . localPlayerState $ gs)
+hostBNetState gs = NetState ps Nothing where ps = localPlayerState gs
 
 receiveState
   :: TQueue (StateUpdate NetState) -> IO (Maybe (StateUpdate NetState))
@@ -139,7 +142,7 @@ writeState
   -> IO ()
 writeState f q pid gs = do
   -- TODO replace with sending network output states at a fixed rate (see FRP2016 paper)
-  threadDelay 10000
+  --threadDelay 10000
   atomically $ writeTQueue q $ StateUpdate pid $ f gs
 
 runGameReader :: Monad m => GameSettings -> SF (GameEnv m) a b -> SF m a b

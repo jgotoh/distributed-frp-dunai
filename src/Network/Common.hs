@@ -26,6 +26,9 @@ instance Binary UnhandledMessage
 
 type Nickname = String
 
+-- The frequency clients are sending StateUpdates
+type CommandRate = Time.TimeInterval
+
 data Client a = Client { clientPid :: P.ProcessId
                      , sendQueue :: TQueue (StateUpdate a)
                      , readQueue :: TQueue (StateUpdate a)
