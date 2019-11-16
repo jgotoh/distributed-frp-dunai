@@ -1,7 +1,32 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE MonoLocalBinds #-}
 
-module Network.Common where
+module Network.Common
+  ( HostName
+  , ServiceName
+  , SessionName
+  , Nickname
+  , ServerStateSendPort(..)
+  , ServerStateReceivePort(..)
+  , JoinRequest(..)
+  , JoinRequestResult(..)
+  , JoinAccepted(..)
+  , CommandPacket
+  , Server(..)
+  , createLocalNode
+  , Binary
+  , Generic
+  , Typeable
+  , CommandRate
+  , Client(..)
+  , ServerStateChannel(..)
+  , serverStateSendPort
+  , serverStateReceivePort
+  , searchProcessTimeout
+  , Message(..)
+  , StateUpdate(..)
+  )
+where
 
 import           Control.Concurrent.STM.TQueue
 import qualified Control.Distributed.Process   as P
@@ -11,8 +36,9 @@ import qualified Control.Distributed.Process.Extras.Time
 import qualified Control.Distributed.Process.Node
                                                as Node
 import           Control.Distributed.Process.Serializable
-import           Data.Binary
+import           Data.Binary (Binary)
 import qualified Network.Transport             as T
+import           Network.Socket (HostName, ServiceName)
 import           Type.Reflection
 import           GHC.Generics                   ( Generic )
 
@@ -25,6 +51,7 @@ data UnhandledMessage = Peng
 instance Binary UnhandledMessage
 
 type Nickname = String
+type SessionName = String
 
 -- The frequency clients are sending StateUpdates
 type CommandRate = Time.TimeInterval
@@ -80,6 +107,11 @@ instance Serializable a => Binary (JoinAccepted a)
 data StateUpdate a = StateUpdate P.ProcessId a
   deriving (Generic, Show, Typeable)
 instance Binary a => Binary (StateUpdate a)
+
+-- Multiple StateUpdates at once
+data CommandPacket a = CommandPacket P.ProcessId [a]
+  deriving (Generic, Show, Typeable)
+instance Binary a => Binary (CommandPacket a)
 
 serverStateSendPort :: ServerStateSendPort a -> P.SendPort (StateUpdate a)
 serverStateSendPort sp = case sp of

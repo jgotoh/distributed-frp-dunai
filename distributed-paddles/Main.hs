@@ -13,7 +13,6 @@ import           Types
 
 import           Control.Applicative
 --import           Control.Exception
-import           Control.Concurrent
 import           Control.Concurrent.STM.TQueue
 import           Control.Concurrent.STM.TMVar
 import qualified Control.Distributed.Process   as P

@@ -1,6 +1,13 @@
 {-# LANGUAGE FlexibleContexts #-}
 
-module Network.Client where
+module Network.Client
+  (startClientProcess
+  , searchForServer
+  , createServerStateChannel
+  , runProcessResult
+  , initializeClientNode
+  )
+where
 
 import           Network.Common
 import           Network.Server
@@ -10,22 +17,16 @@ import           Control.Concurrent.STM.TMVar
 import qualified Control.Distributed.Process   as P
 import qualified Control.Distributed.Process.Extras.Time
                                                as Time
-import qualified Control.Distributed.Process.Extras.Timer
-                                               as Timer
-import qualified Control.Distributed.Process.ManagedProcess
-                                               as MP
 import qualified Control.Distributed.Process.Node
                                                as Node
 import           Control.Exception.Base         ( IOException )
 import           Control.Monad
 import           Control.Monad.Catch
 import           Control.Monad.STM
-import           Data.Binary
 import           Data.ByteString.Char8
 import qualified Network.Socket                as N
 import qualified Network.Transport.TCP         as NT
 import qualified Network.Transport             as T
-import           Type.Reflection
 
 initializeClientNode
   :: N.HostName -> N.ServiceName -> IO (Either IOException Node.LocalNode)
@@ -68,6 +69,7 @@ startClientProcess node server nick sChanP = do
   return $ (Client pid sQueue rQueue, rVar) -- return $ (Client _, CurrentState)
 
 -- TODO create something along the lines of P.ProcessDefinition for clients
+-- TODO cmdrate as argument
 clientProcess
   :: (Binary a, Typeable a)
   => Node.LocalNode
@@ -152,7 +154,7 @@ sendStateProcess q s r = forever $ delay >> readQ q >>= sendState
     xs <- flushTQueue q'
     return xs
   -- TODO sendState currently only sends the newest state
-  sendState (x : xs) = clientUpdate s x
+  sendState (x : _) = clientUpdate s x
   sendState ([]    ) = return ()
   delay = P.liftIO $ threadDelay (Time.asTimeout r)
 
@@ -167,84 +169,4 @@ sendJoinRequest s nick (ServerStateSendPort sp) = do
   P.liftIO $ print $ "send joinRequest: " ++ show request
   joinRequest s request
   where request = JoinRequest nick (ServerStateSendPort sp)
-
--- old source code
-
-launchClient
-  :: N.HostName -> N.ServiceName -> String -> String -> String -> IO ()
-launchClient ip port nick server name = do
-  transport <- NT.createTransport (NT.defaultTCPAddr ip port)
-                                  NT.defaultTCPParameters
-  case transport of
-    Left  failure -> print $ show failure
-    Right success -> do
-      print "successfully connected to client socket"
-
-      node <- createLocalNode success
-      Node.runProcess node $ do
-
-        let clientAddress =
-              P.nodeAddress $ Node.localNodeId node :: T.EndPointAddress
-        P.liftIO $ print $ "Client starts at: " ++ show clientAddress
-
-        let serverEndpoint = T.EndPointAddress $ pack server
-            serverNode     = P.NodeId serverEndpoint
-
-        P.liftIO
-          $  print
-          $  "searching server process "
-          ++ name
-          ++ " - "
-          ++ show serverNode
-        maybePid <- searchProcessTimeout name serverNode 1000
-
-        case maybePid of
-          Just serverPid -> do
-            P.link serverPid
-            (sp, rp)   <- P.newChan
-            joinResult <- sendJoinRequest (Server serverPid)
-                                          nick
-                                          (ServerStateSendPort sp)
-            case joinResult of
-              JoinRequestResult e -> case e of
-                Left  err -> P.liftIO $ print err
-                Right acc -> do
-                  P.liftIO $ print $ "join successful: " ++ show acc
-                  chanPingLoop serverPid rp (msg acc)
-            return ()
-          Nothing -> return ()
-  return ()
-  where msg (JoinAccepted nicks) = if Prelude.null nicks then Ping else Pong
-
-castPingLoop :: P.ProcessId -> P.Process ()
-castPingLoop pid = do
-  P.liftIO $ print "cast Ping"
-  MP.cast pid Ping
-  Timer.sleepFor 500 Time.Millis
-  castPingLoop pid
-
-callPingLoop :: P.ProcessId -> P.Process ()
-callPingLoop pid = do
-  P.liftIO $ print "call Ping"
-  pong <- MP.call pid Ping :: P.Process Message
-  P.liftIO $ print $ "received: " ++ show pong
-  Timer.sleepFor 500 Time.Millis
-  callPingLoop pid
-
-chanPingLoop
-  :: P.ProcessId
-  -> P.ReceivePort (StateUpdate Message)
-  -> Message
-  -> P.Process ()
-chanPingLoop pid rp msg0 = do
-  sendStateUpdate pid $ StateUpdate undefined msg0
-  msg <- P.receiveChan rp
-  P.liftIO $ print $ "received: " ++ show msg
-  Timer.sleepFor 500 Time.Millis
-  chanPingLoop pid rp msg0
-
-sendStateUpdate :: P.ProcessId -> StateUpdate Message -> P.Process ()
-sendStateUpdate pid msg = do
-  _ <- MP.callChan pid msg :: P.Process (P.ReceivePort ())
-  return ()
 

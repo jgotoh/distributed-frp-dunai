@@ -3,9 +3,7 @@
 
 module Types where
 
-import           Data.Word
 import           FRP.BearRiver
-import qualified SDL
 import qualified SDL.Primitive
 import           SDL.Vect
 

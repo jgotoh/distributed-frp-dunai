@@ -1,7 +1,6 @@
 module Collision where
 
 import           Control.Applicative
-import           Debug.Trace
 import           Types
 import           SDL.Vect                hiding ( trace )
 
@@ -48,6 +47,8 @@ boundsColliding xMin xMax yMin yMax (Sphere p r) =
     V2 _ y -> round y
   bottom = case p - V2 0 r of
     V2 _ y -> round y
+
+boundsColliding _ _ _ _ (AABB _ _) = undefined
 
 -- if the bool is true, returns Just a, else returns Nothing
 choice :: Bool -> a -> Maybe a

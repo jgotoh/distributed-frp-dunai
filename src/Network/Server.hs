@@ -1,8 +1,6 @@
-{-# LANGUAGE DeriveGeneric #-}
 
 module Network.Server
-  (
-  clientUpdate
+  ( clientUpdate
   , joinRequest
   , serverProcessDef
   , startServerProcess
@@ -10,6 +8,7 @@ module Network.Server
   )
 where
 
+import           Network.Internal.ServerCommon
 import           Network.Common          hiding ( Client )
 
 import           Control.Concurrent
@@ -24,12 +23,9 @@ import qualified Control.Distributed.Process.ManagedProcess
 import qualified Control.Distributed.Process.Node
                                                as Node
 import           Control.Monad
-import           Data.Binary
-import           GHC.Generics                   ( Generic )
 import qualified Network.Socket                as N
 import qualified Network.Transport.TCP         as NT
 import qualified Network.Transport             as T
-import           Type.Reflection
 
 -- client facing API
 
@@ -37,26 +33,6 @@ import           Type.Reflection
 clientUpdate
   :: (Addressable a, Binary m, Typeable m) => a -> StateUpdate m -> P.Process ()
 clientUpdate = MP.cast
-
--- Sends a JoinRequest and returns the result
-joinRequest
-  :: (Addressable a, Binary m, Typeable m)
-  => a
-  -> JoinRequest m
-  -> P.Process (JoinRequestResult [Nickname])
-joinRequest = MP.call
-
-type ServerProcessDefinition a = MP.ProcessDefinition (ServerState a)
-
-data Client a = Client { nameClient :: Nickname
-                       , serverStateClient :: ServerStateSendPort a
-                       }
-  deriving (Generic, Typeable)
-
-instance Show (Client a) where
-  show c = "Client " ++ nameClient c ++ "," ++ show (serverStateClient c)
-
-type ServerState a = [Client a]
 
 startServerProcess :: (Binary a, Typeable a) => N.HostName -> N.ServiceName -> String -> ServerProcessDefinition a -> IO ()
 startServerProcess ip port name def = do
@@ -84,12 +60,6 @@ startServerProcess ip port name def = do
     P.liftIO $ forever $ threadDelay 16
   return ()
 
-serverProcess :: (Binary a, Typeable a) => ServerProcessDefinition a -> P.Process ()
-serverProcess def = MP.serve
-  ()
-  initHandler
-  def
-  where initHandler _ = return (MP.InitOk [] Time.NoDelay)
 
 serverProcessDef :: (Binary a, Typeable a) => ServerProcessDefinition a
 serverProcessDef = MP.defaultProcess
@@ -170,7 +140,7 @@ serverUpdate
 serverUpdate m c = P.sendChan (serverStateSendPort (serverStateClient c)) m
 
 hasProcessId :: P.ProcessId -> Client a -> Bool
-hasProcessId id' (Client _ port) =
+hasProcessId id' (Network.Internal.ServerCommon.Client _ port) =
   P.sendPortProcessId (P.sendPortId (serverStateSendPort port)) == id'
 
 -- TODO summarize withoutClient[']. maybe via contramap
@@ -181,8 +151,8 @@ withoutClient' portId =
 withoutClient :: P.ProcessId -> ServerState a -> ServerState a
 withoutClient pid = filter (not <$> hasIdentification pid)
 
-generalizedHasId :: Eq b => b -> (Client a -> b) -> Client a -> Bool
-generalizedHasId b f c = b == f c
+--generalizedHasId :: Eq b => b -> (Client a -> b) -> Client a -> Bool
+--generalizedHasId b f c = b == f c
 
 hasIdentification :: P.ProcessId -> Client a -> Bool
 hasIdentification pid c = pid == P.sendPortProcessId
