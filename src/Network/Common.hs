@@ -11,9 +11,10 @@ module Network.Common
   , JoinRequest(..)
   , JoinRequestResult(..)
   , JoinAccepted(..)
-  , CommandPacket
+  , JoinError (..)
   , Server(..)
   , createLocalNode
+  , initializeNode
   , Binary
   , Generic
   , Typeable
@@ -36,6 +37,9 @@ import qualified Control.Distributed.Process.Extras.Time
 import qualified Control.Distributed.Process.Node
                                                as Node
 import           Control.Distributed.Process.Serializable
+import qualified Network.Transport.TCP         as NT
+import qualified Network.Socket                as N
+import           Control.Exception.Base         ( IOException )
 import           Data.Binary (Binary)
 import qualified Network.Transport             as T
 import           Network.Socket (HostName, ServiceName)
@@ -93,25 +97,23 @@ data JoinRequest a = JoinRequest Nickname (ServerStateSendPort a)
 instance Serializable a => Binary (JoinRequest a)
 
 newtype JoinRequestResult a = JoinRequestResult (Either JoinError (JoinAccepted a))
-  deriving (Generic, Show, Typeable)
+  deriving (Generic, Show, Typeable, Eq)
 instance Serializable a => Binary (JoinRequestResult a)
 
 newtype JoinError = JoinError String
-  deriving (Generic, Show, Typeable)
+  deriving (Generic, Show, Typeable, Eq)
 instance Binary JoinError
 
 data JoinAccepted a = JoinAccepted a
-  deriving (Generic, Show, Typeable)
+  deriving (Generic, Show, Typeable, Eq)
 instance Serializable a => Binary (JoinAccepted a)
 
-data StateUpdate a = StateUpdate P.ProcessId a
-  deriving (Generic, Show, Typeable)
-instance Binary a => Binary (StateUpdate a)
+-- instance Eq a => Eq (JoinAccepted a) where
+  -- x == y = case x of JoinAccepted xs -> case y of JoinAccepted ys -> xs == ys
 
--- Multiple StateUpdates at once
-data CommandPacket a = CommandPacket P.ProcessId [a]
-  deriving (Generic, Show, Typeable)
-instance Binary a => Binary (CommandPacket a)
+data StateUpdate a = StateUpdate P.ProcessId a
+  deriving (Generic, Show, Typeable, Eq)
+instance Binary a => Binary (StateUpdate a)
 
 serverStateSendPort :: ServerStateSendPort a -> P.SendPort (StateUpdate a)
 serverStateSendPort sp = case sp of
@@ -151,4 +153,15 @@ searchProcessTimeout name addr timeLeft
 
 createLocalNode :: T.Transport -> IO Node.LocalNode
 createLocalNode transport = Node.newLocalNode transport Node.initRemoteTable
+
+initializeNode
+  :: N.HostName -> N.ServiceName -> IO (Either IOException (Node.LocalNode, T.Transport) )
+initializeNode ip port = do
+  -- TODO is Bifunctor.second usable here?
+  t <- NT.createTransport (NT.defaultTCPAddr ip port) NT.defaultTCPParameters
+  case t of
+    Left  l -> return $ Left l
+    Right r -> do
+      n <- createLocalNode r
+      return $ Right (n, r)
 

@@ -5,7 +5,6 @@ module Network.Client
   , searchForServer
   , createServerStateChannel
   , runProcessResult
-  , initializeClientNode
   )
 where
 
@@ -19,6 +18,8 @@ import qualified Control.Distributed.Process.Extras.Time
                                                as Time
 import qualified Control.Distributed.Process.Node
                                                as Node
+import qualified Control.Distributed.Process.ManagedProcess
+                                               as MP
 import           Control.Exception.Base         ( IOException )
 import           Control.Monad
 import           Control.Monad.Catch
@@ -27,17 +28,6 @@ import           Data.ByteString.Char8
 import qualified Network.Socket                as N
 import qualified Network.Transport.TCP         as NT
 import qualified Network.Transport             as T
-
-initializeClientNode
-  :: N.HostName -> N.ServiceName -> IO (Either IOException Node.LocalNode)
-initializeClientNode ip port = do
-  -- TODO is Bifunctor.second usable here?
-  t <- NT.createTransport (NT.defaultTCPAddr ip port) NT.defaultTCPParameters
-  case t of
-    Left  l -> return $ Left l
-    Right r -> do
-      n <- createLocalNode r
-      return $ Right n
 
 startClientProcess
   :: (Binary a, Typeable a)
@@ -52,6 +42,7 @@ startClientProcess node server nick sChanP = do
   rVar   <- newEmptyTMVarIO
   pid    <- Node.forkProcess node $ catch
     (do
+
       ServerStateChannel sp rp <- sChanP
       joinResult               <- sendJoinRequest server nick sp
 
@@ -86,7 +77,7 @@ clientProcess node server rp rQueue sQueue = do
     Server pid -> P.link pid
 
   inPid  <- P.liftIO $ Node.forkProcess node (receiveStateProcess rQueue rp)
-  outPid <- P.liftIO $ Node.forkProcess node (sendStateProcess sQueue server (Time.milliSeconds 30))
+  outPid <- P.liftIO $ Node.forkProcess node (sendStateProcess sQueue server (Time.milliSeconds 16))
 
   P.link inPid
   P.link outPid

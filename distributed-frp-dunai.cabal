@@ -32,10 +32,11 @@ library
                        distributed-process-extras,
                        dunai,
                        exceptions,
+                       mtl,
                        network >= 3.0,
                        network-transport,
                        network-transport-tcp,
-                       stm
+                       stm >= 2.4.5
   hs-source-dirs:      src
   default-language:    Haskell2010
 
@@ -74,7 +75,7 @@ library examples-common
 --                       network,
 --                       distributed-frp-dunai,
 --                       sdl2,
---                       stm,
+--                       stm >= 2.4.5,
 --                       transformers-base
 --  hs-source-dirs:      simple-example
 --  default-language:    Haskell2010
@@ -101,7 +102,7 @@ executable distributed-paddles
                        network,
                        distributed-frp-dunai,
                        sdl2,
-                       stm,
+                       stm >= 2.4.5,
                        transformers-base
   hs-source-dirs:      distributed-paddles
   default-language:    Haskell2010
@@ -117,6 +118,15 @@ test-suite distributed-frp-dunai-tests
   ghc-options:         -threaded -Wall
   build-depends:       base,
                        distributed-frp-dunai,
+                       distributed-process,
+                       distributed-process-client-server,
+                       distributed-process-extras,
+                       exceptions,
+                       mtl,
+                       network >= 3.0,
+                       network-transport,
+                       network-transport-tcp,
+                       stm >= 2.4.5,
                        tasty,
                        tasty-hunit
   other-modules:       ServerTest

@@ -16,6 +16,7 @@ import           Control.Applicative
 import           Control.Concurrent.STM.TQueue
 import           Control.Concurrent.STM.TMVar
 import qualified Control.Distributed.Process   as P
+
 --import           Control.Distributed.Process.Extras.Time
 import           Control.Monad
 --import Control.Monad.Reader (lift)
@@ -53,11 +54,11 @@ clientMain :: Show a => String -> a -> String -> String -> String -> IO ()
 clientMain ip port nick name serverAddr = do
   (window, renderer) <- initializeSDL "distributed-paddles"
   timeRef            <- createTimeRef
-  eNode              <- initializeClientNode ip (show port)
+  eNode              <- initializeNode ip (show port)
 
   case eNode of
     Left  ex   -> error $ show ex
-    Right node -> do
+    Right (node, _) -> do
 
       mServer <- runProcessResult node (searchForServer name serverAddr)
 
