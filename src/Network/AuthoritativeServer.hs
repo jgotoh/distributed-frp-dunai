@@ -72,20 +72,16 @@ defaultServerConfig
   -> N.ServiceName
   -> SessionName
   -> ServerProcessDefinition a
-  -> ServerConfiguration IO a
+  -> ServerConfiguration a
 defaultServerConfig node ip port name def = ServerConfiguration
   { nodeConfig              = node
   , hostConfig              = ip
   , portConfig              = port
   , nameConfig              = name
-  , transportConfig         = createTCPTransport
   , processDefinitionConfig = def
   , joinConfig              =
     \s _ -> return $ JoinRequestResult $ Right $ JoinAccepted $ map nameClient s
   }
- where
-  createTCPTransport =
-    NT.createTransport (NT.defaultTCPAddr ip port) NT.defaultTCPParameters
 
 defaultFRPServerDefinition
   :: (Binary a, Typeable a) => ServerProcessDefinition a
@@ -102,7 +98,7 @@ defaultFRPServerDefinition = MP.defaultProcess
 
 -- Starts a server using the supplied config, writes into TMVar when start was successful
 startServerProcess
-  :: (Binary a, Typeable a) => ServerConfiguration IO a -> IO LocalServer
+  :: (Binary a, Typeable a) => ServerConfiguration a -> IO LocalServer
 startServerProcess cfg = do
   v   <- newEmptyTMVarIO
   pid <- Node.forkProcess node $ catch
@@ -140,7 +136,7 @@ startServerProcess cfg = do
 -- Necessary for unit tests, because SendPorts sent via joinRequest somehow immediately die after calls to handleJoinRequest.
 startServerWithClients
   :: (Binary a, Typeable a)
-  => ServerConfiguration IO a
+  => ServerConfiguration a
   -> P.Process [JoinRequest a]
   -> IO (LocalServer, TMVar [JoinRequestResult [Nickname]])
 startServerWithClients cfg reqsP = do

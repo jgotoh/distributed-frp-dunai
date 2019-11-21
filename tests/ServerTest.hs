@@ -41,7 +41,7 @@ testPort = "0"
 testSession :: SessionName
 testSession = "testSession"
 
-testConfiguration :: Node.LocalNode -> ServerConfiguration IO TestMessage
+testConfiguration :: Node.LocalNode -> ServerConfiguration TestMessage
 testConfiguration n =
   defaultServerConfig n testIp testPort testSession defaultFRPServerDefinition
 
@@ -65,7 +65,12 @@ tests mkNT = testGroup
   -- works in distributed-paddles
   -- , testCase "testing join requests" $ mkNT >>= testJoinRequests
   , testCase "testing join requests" $ mkNT >>= testJoinRequests
+  , testCase "test simulating server" $ mkNT >>= testSimulatingServer
   ]
+
+testSimulatingServer :: (Node.LocalNode, T.Transport) -> Assertion
+testSimulatingServer (_, _)= do
+  return ()
 
 testDefaultServer :: (Node.LocalNode, T.Transport) -> Assertion
 testDefaultServer (n, _) = withServer
@@ -91,7 +96,7 @@ testJoinRequests (n, _) = withServerClients (startServerWithClients cfg reqs)
                                             (test n)
                                             n
  where
-  cfg :: ServerConfiguration IO TestMessage
+  cfg :: ServerConfiguration TestMessage
   cfg = (testConfiguration n) { joinConfig = twoClients }
   twoClients xs _ = return $ JoinRequestResult $ if length xs < 2
     then (Right $ JoinAccepted $ nicks xs)
@@ -125,7 +130,7 @@ testJoinRequests (n, _) = withServerClients (startServerWithClients cfg reqs)
 testJoinRequests' :: (Node.LocalNode, T.Transport) -> Assertion
 testJoinRequests' (n, _) = withServer (startServerProcess cfg) (test n) n
  where
-  cfg :: ServerConfiguration IO TestMessage
+  cfg :: ServerConfiguration TestMessage
   cfg = (testConfiguration n) { joinConfig = oneClient }
   oneClient xs _ = return $ JoinRequestResult $ if length xs <= 2
     then (Right $ JoinAccepted $ nicks xs)
@@ -189,6 +194,8 @@ withServer mkServer test n = do
     Node.runProcess n $ exitProc s "" >> P.unregister testSession
 
 -- TODO test:
+-- 1. servers that run simulations themselves
+-- 2. test stateUpdate sending
 -- joining leaving simulations in progress
 -- send state to clients
 -- return initial state of world on join

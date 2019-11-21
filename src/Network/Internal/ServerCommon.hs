@@ -17,7 +17,7 @@ module Network.Internal.ServerCommon
   )
 where
 
-import Control.Monad
+import           Control.Monad
 import           Control.Exception
 import qualified Control.Distributed.Process.ManagedProcess
                                                as MP
@@ -34,12 +34,11 @@ import qualified Control.Distributed.Process.Node
 
 type ServerProcessDefinition a = MP.ProcessDefinition (ServerState a)
 
-data ServerConfiguration m a = ServerConfiguration
+data ServerConfiguration a = ServerConfiguration
   { nodeConfig :: Node.LocalNode
   , hostConfig :: N.HostName
   , portConfig :: N.ServiceName
   , nameConfig :: SessionName
-  , transportConfig :: m (Either IOException T.Transport)
   , processDefinitionConfig :: ServerProcessDefinition a
   , joinConfig :: ServerState a -> JoinRequest a -> P.Process (JoinRequestResult [Nickname])
   }
@@ -64,7 +63,10 @@ joinRequest
 joinRequest = MP.call
 
 serverProcess
-  :: (Binary a, Typeable a) => ServerProcessDefinition a -> ServerState a -> P.Process ()
+  :: (Binary a, Typeable a)
+  => ServerProcessDefinition a
+  -> ServerState a
+  -> P.Process ()
 serverProcess def s0 = MP.serve () initHandler def
   where initHandler _ = return (MP.InitOk s0 Time.NoDelay)
 
@@ -98,8 +100,7 @@ handleMonitorNotification s (P.PortMonitorNotification ref port reason) = do
 
   P.unmonitor ref
   MP.continue s'
-  where
-    s' = withoutClient' port s
+  where s' = withoutClient' port s
 
 -- TODO summarize withoutClient[']. maybe via contramap
 withoutClient' :: P.SendPortId -> ServerState a -> ServerState a
