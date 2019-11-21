@@ -8,7 +8,7 @@ module Network.AuthoritativeServer
   , defaultServerConfig
   , startServerProcess
   , startServerWithClients
-  , defaultFRPServerDefinition
+  , defaultFRPProcessDefinition
   , Client(..)
   )
 where
@@ -83,9 +83,9 @@ defaultServerConfig node ip port name def = ServerConfiguration
     \s _ -> return $ JoinRequestResult $ Right $ JoinAccepted $ map nameClient s
   }
 
-defaultFRPServerDefinition
+defaultFRPProcessDefinition
   :: (Binary a, Typeable a) => ServerProcessDefinition a
-defaultFRPServerDefinition = MP.defaultProcess
+defaultFRPProcessDefinition = MP.defaultProcess
   { MP.apiHandlers            = [ MP.handleCall handleJoinRequest
                                 , MP.handleCast handleStateUpdate
                                 ]

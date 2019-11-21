@@ -43,7 +43,7 @@ testSession = "testSession"
 
 testConfiguration :: Node.LocalNode -> ServerConfiguration TestMessage
 testConfiguration n =
-  defaultServerConfig n testIp testPort testSession defaultFRPServerDefinition
+  defaultServerConfig n testIp testPort testSession defaultFRPProcessDefinition
 
 serverTests :: TestTree
 serverTests = withResource withNode clearNode tests
