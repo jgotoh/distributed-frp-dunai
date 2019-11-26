@@ -10,7 +10,8 @@ import           Control.Concurrent.STM
 import           Control.Exception       hiding ( catch )
 import           Control.Monad.Catch
 import           Control.Monad
-import           Network.Common
+import           FRP.BearRiver
+import           Network.Common          hiding ( Client(..), Message(..))
 import           Network.AuthoritativeServer
 import           Test.Tasty
 import           Test.Tasty.HUnit
@@ -26,7 +27,7 @@ import           Control.Distributed.Process.Extras
 
 import qualified Network.Transport             as T
 data TestMessage = Ping | Pong
-  deriving (Generic, Show, Typeable)
+  deriving (Generic, Show, Typeable, Eq)
 instance Binary TestMessage
 
 type TestState = StateUpdate TestMessage
@@ -55,22 +56,63 @@ serverTests = withResource withNode clearNode tests
         _ <- Log.systemLog (P.liftIO . print) (return ()) Log.Debug return
         return ()
       return nt
-  clearNode (n, t) = Node.closeLocalNode n >> T.closeTransport t
+  clearNode (n, t) = do
+    print "closing node now"
+    Node.closeLocalNode n >> T.closeTransport t
 
 tests :: IO (Node.LocalNode, T.Transport) -> TestTree
 tests mkNT = testGroup
   "ServerTests"
   [ testCase "testing default configuration" $ mkNT >>= testDefaultServer
-  -- deactivated, because SendPorts sent to a server mysteriously die.
-  -- works in distributed-paddles
-  -- , testCase "testing join requests" $ mkNT >>= testJoinRequests
   , testCase "testing join requests" $ mkNT >>= testJoinRequests
-  , testCase "test simulating server" $ mkNT >>= testSimulatingServer
+  , testCase "testing clientUpdate" $ mkNT >>= testClientUpdates
+  -- , testCase "testing join requests" $ mkNT >>= testJoinRequests
+  -- , testCase "test simulating server" $ mkNT >>= testSimulatingServer
   ]
 
-testSimulatingServer :: (Node.LocalNode, T.Transport) -> Assertion
-testSimulatingServer (_, _)= do
-  return ()
+-- Tests a server that is running a simulation
+-- Snapshots of the simulation (StateUpdate) are sent at a static rate
+-- s -> c updaterate
+-- TODO usage should be analogous to Client!
+-- Tests whether updates sent by clientUpdate are correctly added to the receivingQueue of a server
+testClientUpdates :: (Node.LocalNode, T.Transport) -> Assertion
+testClientUpdates (n, _) = withServer
+  (startServerProcess (testConfiguration n))
+  test
+  n
+ where
+  nick1 = "1"
+  test server = Node.runProcess n $ do
+
+    (Right sPid)   <- P.liftIO . atomically . readTMVar $ pidApiServer server
+
+    (sp1v, sp1pid) <- P.liftIO $ testProcess n
+    sp1            <- P.liftIO . atomically $ readTMVar sp1v
+
+    let ssp1 = ServerStateSendPort sp1
+        join1 = JoinRequest nick1 ssp1
+        update = StateUpdate sp1pid Ping
+
+    -- Send StateUpdate without first connecting to the server
+    -- the Server should ignore it
+    clientUpdate sPid update
+    clientUpdate sPid update
+    P.liftIO $ threadDelay 1000000
+    q <- P.liftIO . atomically . flushTQueue $ readQueue server
+    P.liftIO $ [] @=? q
+
+    -- Connect and send again
+    _ <- joinRequest sPid join1
+    clientUpdate sPid update
+    P.liftIO $ threadDelay 1000000
+    q <- P.liftIO . atomically . flushTQueue $ readQueue server
+    P.liftIO $ [update] @=? q
+
+    clientUpdate sPid update
+    clientUpdate sPid update
+    P.liftIO $ threadDelay 1000000
+    q <- P.liftIO . atomically . flushTQueue $ readQueue server
+    P.liftIO $ [update, update] @=? q
 
 testDefaultServer :: (Node.LocalNode, T.Transport) -> Assertion
 testDefaultServer (n, _) = withServer
@@ -91,99 +133,88 @@ testDefaultServer (n, _) = withServer
       P.liftIO $ main @? "main process is not active"
       P.liftIO $ api @? "api process is not active"
 
+-- Tests handling of JoinRequests and monitoring of ServerStateSendPorts
 testJoinRequests :: (Node.LocalNode, T.Transport) -> Assertion
-testJoinRequests (n, _) = withServerClients (startServerWithClients cfg reqs)
-                                            (test n)
-                                            n
+testJoinRequests (n, _) = withServer (startServerProcess cfg) (test n) n
  where
   cfg :: ServerConfiguration TestMessage
   cfg = (testConfiguration n) { joinConfig = twoClients }
   twoClients xs _ = return $ JoinRequestResult $ if length xs < 2
     then (Right $ JoinAccepted $ nicks xs)
-    else (Left $ JoinError joinErrorMsg)
-  joinErrorMsg = "joinError"
-  reqs         = do
-
-    (sp1, _) <-
-      P.newChan :: P.Process (P.SendPort TestState, P.ReceivePort TestState)
-    (sp2, _) <-
-      P.newChan :: P.Process (P.SendPort TestState, P.ReceivePort TestState)
-    (sp3, _) <-
-      P.newChan :: P.Process (P.SendPort TestState, P.ReceivePort TestState)
-
-    let join1 = JoinRequest "1" (ServerStateSendPort sp1)
-        join2 = JoinRequest "2" (ServerStateSendPort sp2)
-        join3 = JoinRequest "3" (ServerStateSendPort sp3)
-    return [join1, join2, join3]
-
+    else (Left $ JoinError errorMsg)
   nicks xs = map nameClient xs
-  test node _ joinResults = Node.runProcess node $ do
-
-    let expected1 = JoinRequestResult $ Right $ JoinAccepted []
-        expected2 = JoinRequestResult $ Right $ JoinAccepted ["1"]
-        expected3 = JoinRequestResult $ Left $ JoinError joinErrorMsg
-        expected  = [expected1, expected2, expected3]
-
-    P.liftIO $ expected @=? joinResults
-
--- Fails because SendPorts sent via JoinRequests mysteriously die
-testJoinRequests' :: (Node.LocalNode, T.Transport) -> Assertion
-testJoinRequests' (n, _) = withServer (startServerProcess cfg) (test n) n
- where
-  cfg :: ServerConfiguration TestMessage
-  cfg = (testConfiguration n) { joinConfig = oneClient }
-  oneClient xs _ = return $ JoinRequestResult $ if length xs <= 2
-    then (Right $ JoinAccepted $ nicks xs)
-    else (Left $ JoinError "err")
-  nicks xs = map nameClient xs
+  errorMsg = "error message"
+  nick1    = "1"
+  nick2    = "2"
+  nick3    = "3"
   test node server = Node.runProcess node $ do
 
-    let vPid = pidApiServer server
-    (Right sPid) <- P.liftIO $ atomically $ readTMVar vPid
+    (Right sPid)   <- P.liftIO . atomically . readTMVar $ pidApiServer server
 
-    (sp1, _)     <-
-      P.newChan :: P.Process (P.SendPort TestState, P.ReceivePort TestState)
-    (sp2, _) <-
-      P.newChan :: P.Process (P.SendPort TestState, P.ReceivePort TestState)
-    (sp3, _) <-
-      P.newChan :: P.Process (P.SendPort TestState, P.ReceivePort TestState)
+    -- Create 3 Processes with SendPorts to connect to server
+    (sp1v, sp1pid) <- P.liftIO $ testProcess n
+    (sp2v, sp2pid) <- P.liftIO $ testProcess n
+    (sp3v, sp3pid) <- P.liftIO $ testProcess n
 
-    P.linkPort sp1
-    P.linkPort sp2
-    P.linkPort sp3
+    sp1            <- P.liftIO $ atomically $ readTMVar sp1v
+    sp2            <- P.liftIO $ atomically $ readTMVar sp2v
+    sp3            <- P.liftIO $ atomically $ readTMVar sp3v
 
-    let join1 = JoinRequest "1" (ServerStateSendPort sp1)
-        join2 = JoinRequest "2" (ServerStateSendPort sp2)
-        join3 = JoinRequest "3" (ServerStateSendPort sp3)
+    let ssp1  = ServerStateSendPort sp1
+        ssp2  = ServerStateSendPort sp2
+        ssp3  = ServerStateSendPort sp3
+        join1 = JoinRequest nick1 ssp1
+        join2 = JoinRequest nick2 ssp2
+        join3 = JoinRequest nick3 ssp3
 
     (JoinRequestResult (Right (JoinAccepted xs1))) <- joinRequest sPid join1
     (JoinRequestResult (Right (JoinAccepted xs2))) <- joinRequest sPid join2
     (JoinRequestResult (Left  (JoinError    err))) <- joinRequest sPid join3
 
     P.liftIO $ xs1 @?= []
-    P.liftIO $ xs2 @?= ["1"]
-    P.liftIO $ err @=? "error message"
-    return ()
+    P.liftIO $ xs2 @?= [nick1]
+    P.liftIO $ err @?= errorMsg
 
--- Create a server in a computation, pass it to the test and then shutdown the server
-withServerClients
-  :: IO (LocalServer, TMVar [JoinRequestResult [Nickname]])
-  -> (LocalServer -> [JoinRequestResult [Nickname]] -> Assertion)
-  -> Node.LocalNode
-  -> Assertion
-withServerClients mkServer test n = do
-  (server, v) <- mkServer
-  (Right _)   <- atomically $ readTMVar (pidApiServer server)
-  results     <- atomically $ readTMVar v
-  test server results
-  exitServer server
- where
-  exitServer s = do
-    Node.runProcess n $ exitProc s "" >> P.unregister testSession
+    -- test getState
+    state <- P.liftIO $ getState server
+
+    let expectedClient1 = Client nick1 ssp1
+        expectedClient2 = Client nick2 ssp2
+        expectedState   = [expectedClient2, expectedClient1]
+
+    P.liftIO $ expectedState @=? state
+
+    -- then remove clients, and test getState again
+    P.kill sp1pid "removing client 1"
+    -- the notification the server receives when a client quits is delivered asynchronously, so we first wait an arbitrary amount of time
+    P.liftIO $ threadDelay 1000000
+    state <- P.liftIO $ getState server
+    let expectedState = [expectedClient2]
+    P.liftIO $ expectedState @=? state
+
+    P.kill sp2pid "removing client 2"
+    P.liftIO $ threadDelay 1000000
+    state <- P.liftIO $ getState server
+    P.liftIO $ [] @=? state
+
+-- Starts a process that creates a channel for state exchanges and checks forever for incoming messages
+testProcess :: Node.LocalNode -> IO (TMVar (P.SendPort TestState), P.ProcessId)
+testProcess n = do
+  v   <- newEmptyTMVarIO
+  pid <- Node.forkProcess n $ do
+    (sp, rp) <-
+      P.newChan :: P.Process (P.SendPort TestState, P.ReceivePort TestState)
+    P.liftIO . atomically $ putTMVar v sp
+    P.linkPort sp
+    forever $ P.receiveChan rp
+  return (v, pid)
 
 -- Create a server in a computation, pass it to the test and then shutdown the server
 withServer
-  :: IO LocalServer -> (LocalServer -> Assertion) -> Node.LocalNode -> Assertion
+  :: IO (LocalServer a)
+  -> (LocalServer a -> Assertion)
+  -> Node.LocalNode
+  -> Assertion
 withServer mkServer test n = do
   server    <- mkServer
   (Right _) <- atomically $ readTMVar (pidApiServer server)
@@ -191,16 +222,18 @@ withServer mkServer test n = do
   exitServer server
  where
   exitServer s = do
-    Node.runProcess n $ exitProc s "" >> P.unregister testSession
+    Node.runProcess n
+      $  exitProc s "exiting server via withServer"
+      >> P.unregister testSession
 
 -- TODO test:
--- 1. servers that run simulations themselves
--- 2. test stateUpdate sending
+-- servers that run simulations themselves
+-- test stateUpdate sending
 -- joining leaving simulations in progress
 -- send state to clients
 -- return initial state of world on join
 -- # library users can decide whether clients can join
--- servers need to be handle a varying amount of connected clients
+-- # servers need to be handle a varying amount of connected clients
 -- clients do not need to determine the destination of messages (responsibility of servers)
 -- users of the library need to be able to add new message types
 -- state Updates are generic, users of the library can decide what types of data should be transmitted and how network data is processed

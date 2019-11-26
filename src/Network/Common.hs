@@ -85,7 +85,7 @@ data ServerStateChannel a = ServerStateChannel (ServerStateSendPort a) (ServerSt
 
 -- Port used by a server to send StateUpdates to a client. Server -[state]-> Client
 newtype ServerStateSendPort a = ServerStateSendPort (P.SendPort (StateUpdate a))
-  deriving (Generic, Show, Typeable)
+  deriving (Generic, Show, Typeable, Eq)
 instance Serializable a => Binary (ServerStateSendPort a)
 
 -- Port used by a client to receive StateUpdates from a server. Server -[state]-> Client
@@ -93,7 +93,7 @@ newtype ServerStateReceivePort a = ServerStateReceivePort (P.ReceivePort (StateU
   deriving (Generic)
 
 data JoinRequest a = JoinRequest Nickname (ServerStateSendPort a)
-  deriving (Generic, Show, Typeable)
+  deriving (Generic, Show, Typeable, Eq)
 instance Serializable a => Binary (JoinRequest a)
 
 newtype JoinRequestResult a = JoinRequestResult (Either JoinError (JoinAccepted a))
@@ -107,9 +107,6 @@ instance Binary JoinError
 data JoinAccepted a = JoinAccepted a
   deriving (Generic, Show, Typeable, Eq)
 instance Serializable a => Binary (JoinAccepted a)
-
--- instance Eq a => Eq (JoinAccepted a) where
-  -- x == y = case x of JoinAccepted xs -> case y of JoinAccepted ys -> xs == ys
 
 data StateUpdate a = StateUpdate P.ProcessId a
   deriving (Generic, Show, Typeable, Eq)

@@ -117,10 +117,12 @@ test-suite distributed-frp-dunai-tests
   default-extensions:  Arrows
   ghc-options:         -threaded -Wall
   build-depends:       base,
+                       bearriver,
                        distributed-frp-dunai,
                        distributed-process,
                        distributed-process-client-server,
                        distributed-process-extras,
+                       dunai,
                        exceptions,
                        mtl,
                        network >= 3.0,

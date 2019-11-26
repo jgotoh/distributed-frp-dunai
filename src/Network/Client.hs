@@ -18,15 +18,15 @@ import qualified Control.Distributed.Process.Extras.Time
                                                as Time
 import qualified Control.Distributed.Process.Node
                                                as Node
-import qualified Control.Distributed.Process.ManagedProcess
-                                               as MP
-import           Control.Exception.Base         ( IOException )
+-- import qualified Control.Distributed.Process.ManagedProcess
+                                               -- as MP
+-- import           Control.Exception.Base         ( IOException )
 import           Control.Monad
 import           Control.Monad.Catch
 import           Control.Monad.STM
 import           Data.ByteString.Char8
-import qualified Network.Socket                as N
-import qualified Network.Transport.TCP         as NT
+-- import qualified Network.Socket                as N
+-- import qualified Network.Transport.TCP         as NT
 import qualified Network.Transport             as T
 
 startClientProcess

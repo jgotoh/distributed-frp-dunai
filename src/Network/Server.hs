@@ -15,8 +15,8 @@ import           Control.Concurrent
 import qualified Control.Distributed.Process   as P
 import qualified Control.Distributed.Process.Extras.SystemLog
                                                as Log
-import qualified Control.Distributed.Process.Extras.Time
-                                               as Time
+-- import qualified Control.Distributed.Process.Extras.Time
+                                               -- as Time
 import           Control.Distributed.Process.Extras.Internal.Types
 import qualified Control.Distributed.Process.ManagedProcess
                                                as MP
@@ -80,7 +80,7 @@ serverProcessDef = MP.defaultProcess
 handleStateUpdate
   :: (Binary a, Typeable a) => MP.CastHandler (ServerState a) (StateUpdate a)
 handleStateUpdate s m = do
-  broadcastUpdate m (withoutClient pid s)
+  broadcastUpdate (withoutClient pid s) m
   MP.continue s
  where
   pid = case m of
@@ -95,7 +95,7 @@ handleStateUpdate'
   :: (Binary a, Typeable a)
   => MP.ChannelHandler (ServerState a) (StateUpdate a) ()
 handleStateUpdate' port state msg = do
-  broadcastUpdate msg (withoutClient' sid state)
+  broadcastUpdate (withoutClient' sid state) msg 
   MP.continue state
   where sid = P.sendPortId port
 

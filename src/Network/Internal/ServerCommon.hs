@@ -47,7 +47,7 @@ data Client a = Client
   { nameClient :: Nickname
   , serverStateClient :: ServerStateSendPort a
   }
-  deriving (Generic, Typeable)
+  deriving (Generic, Typeable, Eq)
 
 instance Show (Client a) where
   show c = "Client " ++ nameClient c ++ "," ++ show (serverStateClient c)
@@ -68,7 +68,9 @@ serverProcess
   -> ServerState a
   -> P.Process ()
 serverProcess def s0 = MP.serve () initHandler def
-  where initHandler _ = return (MP.InitOk s0 Time.NoDelay)
+  where initHandler _ = do
+          forM_ (serverStateSendPort <$> serverStateClient <$> s0) P.monitorPort
+          return (MP.InitOk s0 Time.NoDelay)
 
 -- TODO pass in function that decides whether request is accepted
 handleJoinRequest
@@ -130,8 +132,8 @@ logShutdown :: MP.ExitState s -> ExitReason -> P.Process ()
 logShutdown _ reason = P.liftIO $ print $ "logShutdown: " ++ show reason
 
 broadcastUpdate
-  :: (Binary a, Typeable a) => StateUpdate a -> [Client a] -> P.Process ()
-broadcastUpdate msg clients = forM_ clients (serverUpdate msg)
+  :: (Binary a, Typeable a) => [Client a] -> StateUpdate a -> P.Process ()
+broadcastUpdate clients msg = forM_ clients (serverUpdate msg)
 
 serverUpdate
   :: (Binary a, Typeable a) => StateUpdate a -> Client a -> P.Process ()
