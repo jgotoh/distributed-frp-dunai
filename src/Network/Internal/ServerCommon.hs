@@ -15,6 +15,7 @@ module Network.Internal.ServerCommon
   , addApiHandler
   , addInfoHandler
   , addExternHandler
+  , Node.LocalNode
   )
 where
 
@@ -38,7 +39,7 @@ type ServerProcessDefinition a = MP.ProcessDefinition (ServerState a)
 data ServerConfiguration a = ServerConfiguration
   { nodeConfig :: Node.LocalNode
   , hostConfig :: N.HostName
-  , portConfig :: N.ServiceName
+  , portConfig :: Port
   , nameConfig :: SessionName
   , processDefinitionConfig :: ServerProcessDefinition a
   , joinConfig :: ServerState a -> JoinRequest a -> P.Process (JoinRequestResult [Nickname])

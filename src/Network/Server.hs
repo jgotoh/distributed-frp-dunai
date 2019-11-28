@@ -4,6 +4,7 @@
 module Network.Server
   ( clientUpdate
   , joinRequest
+  , snapshot
   , ServerConfiguration(..)
   , ServerProcessDefinition
   , ServerState
@@ -13,6 +14,7 @@ module Network.Server
   , defaultFRPProcessDefinition
   , Client(..)
   , HasState(..)
+  , waitUntilState
   )
 where
 import           Data.Binary                    ( Binary )
@@ -38,10 +40,14 @@ import qualified Network.Socket                as N
 -- client facing API
 
 -- Sends a Command packet
-
 clientUpdate
   :: (Addressable a, Binary m, Typeable m) => a -> StateUpdate m -> P.Process ()
 clientUpdate = MP.cast
+
+-- TODO implement to avoid hardcoded values in distributed-paddles
+-- Requests a snapshot (current state) of the world
+snapshot :: (Addressable a, Binary m, Typeable m) => a -> P.ProcessId -> P.Process (StateUpdate m)
+snapshot = MP.call
 
 -- server setup
 
@@ -78,7 +84,7 @@ defaultServerConfig
   :: (Binary a, Typeable a)
   => Node.LocalNode
   -> N.HostName
-  -> N.ServiceName
+  -> Port
   -> SessionName
   -> ServerProcessDefinition a
   -> ServerConfiguration a
@@ -137,6 +143,14 @@ sendStateProcess q s r = forever $ delay >> do
   sendState css (x : _) = broadcastUpdate css x
   sendState _   []      = return ()
   delay = P.liftIO $ threadDelay (Time.asTimeout r)
+
+-- TODO implement
+-- Blocks until the state satisfies a certain condition
+waitUntilState
+  :: (HasState s a)
+  => s -> (ServerState a -> Bool)
+  -> IO ()
+waitUntilState = undefined
 
 -- Starts a server using the supplied config, writes into TMVar when start was successful
 startServerProcess

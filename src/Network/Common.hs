@@ -19,10 +19,13 @@ module Network.Common
   , Typeable
   , CommandRate
   , ServerStateChannel(..)
+  , Port
+  , ServerAddress
   , serverStateSendPort
   , serverStateReceivePort
   , searchProcessTimeout
   , StateUpdate(..)
+  , Node.LocalNode
   )
 where
 
@@ -45,6 +48,9 @@ import           GHC.Generics                   ( Generic )
 
 type Nickname = String
 type SessionName = String
+type ServerAddress = String
+-- Port number
+type Port = Int
 
 -- The frequency clients are sending StateUpdates
 type CommandRate = Time.TimeInterval
@@ -122,11 +128,11 @@ createLocalNode transport = Node.newLocalNode transport Node.initRemoteTable
 
 initializeNode
   :: N.HostName
-  -> N.ServiceName
+  -> Port
   -> IO (Either IOException (Node.LocalNode, T.Transport))
 initializeNode ip port = do
   -- TODO is Bifunctor.second usable here?
-  t <- NT.createTransport (NT.defaultTCPAddr ip port) NT.defaultTCPParameters
+  t <- NT.createTransport (NT.defaultTCPAddr ip (show port)) NT.defaultTCPParameters
   case t of
     Left  l -> return $ Left l
     Right r -> do

@@ -34,8 +34,8 @@ testIp :: HostName
 testIp = "localhost"
 
 -- requesting port 0 tells the system to automatically find an unused port
-testPort :: ServiceName
-testPort = "0"
+testPort :: Port
+testPort = 0
 
 testSession :: SessionName
 testSession = "testSession"
