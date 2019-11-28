@@ -12,27 +12,21 @@ module Network.Common
   , JoinRequestResult(..)
   , JoinAccepted(..)
   , JoinError(..)
-  , Server(..)
   , createLocalNode
   , initializeNode
   , Binary
   , Generic
   , Typeable
   , CommandRate
-  , Client(..)
   , ServerStateChannel(..)
   , serverStateSendPort
   , serverStateReceivePort
   , searchProcessTimeout
-  , Message(..)
   , StateUpdate(..)
   )
 where
 
--- TODO maybe rename to ClientCommon
-import           Control.Concurrent.STM.TQueue
 import qualified Control.Distributed.Process   as P
-import           Control.Distributed.Process.Extras
 import qualified Control.Distributed.Process.Extras.Time
                                                as Time
 import qualified Control.Distributed.Process.Node
@@ -49,39 +43,11 @@ import           Network.Socket                 ( HostName
 import           Type.Reflection
 import           GHC.Generics                   ( Generic )
 
-data Message = Ping | Pong
-  deriving (Generic, Show, Typeable)
-instance Binary Message
-
-data UnhandledMessage = Peng
-  deriving (Generic, Show, Typeable)
-instance Binary UnhandledMessage
-
 type Nickname = String
 type SessionName = String
 
 -- The frequency clients are sending StateUpdates
 type CommandRate = Time.TimeInterval
-
-data Client a = Client { clientPid :: P.ProcessId
-                     , sendQueue :: TQueue (StateUpdate a)
-                     , readQueue :: TQueue (StateUpdate a)
-                     }
-
-newtype Server = Server P.ProcessId
-  deriving Show
-
-instance Addressable Server
-
-instance Resolvable Server where
-  resolve a = case a of
-    Server pid -> return $ Just pid
-  unresolvableMessage a = "Server could not be resolved: " ++ show a
-
-instance Routable Server where
-  sendTo s m = resolve s >>= maybe (error $ unresolvableMessage s) (`P.send` m)
-  unsafeSendTo s m =
-    resolve s >>= maybe (error $ unresolvableMessage s) (`P.unsafeSend` m)
 
 -- Channel used by the server to send StateUpdates to clients
 data ServerStateChannel a = ServerStateChannel (ServerStateSendPort a) (ServerStateReceivePort a)
@@ -107,7 +73,7 @@ newtype JoinError = JoinError String
   deriving (Generic, Show, Typeable, Eq)
 instance Binary JoinError
 
-data JoinAccepted a = JoinAccepted a
+newtype JoinAccepted a = JoinAccepted a
   deriving (Generic, Show, Typeable, Eq)
 instance Serializable a => Binary (JoinAccepted a)
 

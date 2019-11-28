@@ -14,9 +14,9 @@ cabal-version:       >=1.10
 
 library
   exposed-modules:   FRP.BearRiver.Extra
-                     Network.AuthoritativeServer
                      Network.Client
                      Network.Common
+                     Network.ForwardingServer
                      Network.Server
 
   other-modules:     Network.Internal.ServerCommon

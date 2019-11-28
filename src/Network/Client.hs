@@ -5,6 +5,7 @@ module Network.Client
   , searchForServer
   , createServerStateChannel
   , runProcessResult
+  , LocalClient(..)
   )
 where
 
@@ -14,28 +15,46 @@ import           Control.Concurrent
 import           Control.Concurrent.STM.TQueue
 import           Control.Concurrent.STM.TMVar
 import qualified Control.Distributed.Process   as P
+import           Control.Distributed.Process.Extras
 import qualified Control.Distributed.Process.Extras.Time
                                                as Time
 import qualified Control.Distributed.Process.Node
                                                as Node
--- import qualified Control.Distributed.Process.ManagedProcess
-                                               -- as MP
 -- import           Control.Exception.Base         ( IOException )
 import           Control.Monad
 import           Control.Monad.Catch
 import           Control.Monad.STM
 import           Data.ByteString.Char8
--- import qualified Network.Socket                as N
--- import qualified Network.Transport.TCP         as NT
 import qualified Network.Transport             as T
 
+data LocalClient a = LocalClient { clientPid :: P.ProcessId
+                     , sendQueue :: TQueue (StateUpdate a)
+                     , readQueue :: TQueue (StateUpdate a)
+                     }
+
+newtype Server = Server P.ProcessId
+  deriving Show
+
+instance Addressable Server
+
+instance Resolvable Server where
+  resolve a = case a of
+    Server pid -> return $ Just pid
+  unresolvableMessage a = "Server could not be resolved: " ++ show a
+
+instance Routable Server where
+  sendTo s m = resolve s >>= maybe (error $ unresolvableMessage s) (`P.send` m)
+  unsafeSendTo s m =
+    resolve s >>= maybe (error $ unresolvableMessage s) (`P.unsafeSend` m)
+
+-- Starts a client, searches for a server and tries to join it
 startClientProcess
   :: (Binary a, Typeable a)
   => Node.LocalNode
   -> Server
   -> String
   -> P.Process (ServerStateChannel a)
-  -> IO (Client a, TMVar (JoinRequestResult [Nickname]))
+  -> IO (LocalClient a, TMVar (JoinRequestResult [Nickname]))
 startClientProcess node server nick sChanP = do
   sQueue <- newTQueueIO
   rQueue <- newTQueueIO
@@ -50,14 +69,13 @@ startClientProcess node server nick sChanP = do
 
       case joinResult of
         JoinRequestResult r -> case r of
-          Left err -> do
-            P.liftIO $ print err
+          Left  err -> P.liftIO $ print err
           Right acc -> do
             P.liftIO $ print $ "join successful: " ++ show acc
             clientProcess node server rp rQueue sQueue
     )
     (\e -> P.liftIO $ print $ show (e :: SomeException))
-  return $ (Client pid sQueue rQueue, rVar) -- return $ (Client _, CurrentState)
+  return (LocalClient pid sQueue rQueue, rVar) -- return $ (LocalClient _, CurrentState)
 
 -- TODO create something along the lines of P.ProcessDefinition for clients
 -- TODO cmdrate as argument
@@ -70,7 +88,7 @@ clientProcess
   -> TQueue (StateUpdate a)
   -> P.Process ()
 clientProcess node server rp rQueue sQueue = do
-  P.liftIO $ print $ "Client starts at: " ++ show
+  P.liftIO $ print $ "LocalClient starts at: " ++ show
     (P.nodeAddress $ Node.localNodeId node)
 
   case server of
@@ -87,14 +105,6 @@ clientProcess node server rp rQueue sQueue = do
   P.liftIO $ print "clientProcess now waits"
   _ <- P.liftIO $ forever $ threadDelay 100000
   P.liftIO $ print "clientProcess ends"
-
-monitoringProcess :: P.ProcessId -> P.Process ()
-monitoringProcess pid = do
-  P.link pid
-  _ <- P.monitor pid
-  forever $ do
-    n <- P.expect :: P.Process P.ProcessMonitorNotification
-    P.liftIO $ print $ "monitoringProcess: " ++ show n
 
 -- Creates a typed channel used by servers to send StateUpdates to clients.
 createServerStateChannel
@@ -147,12 +157,10 @@ sendStateProcess
   -> P.Process ()
 sendStateProcess q s r = forever $ delay >> readQ q >>= sendState
  where
-  readQ q' = P.liftIO . atomically $ do
-    xs <- flushTQueue q'
-    return xs
+  readQ q' = P.liftIO . atomically $ flushTQueue q'
   -- TODO sendState currently only sends the newest state
   sendState (x : _) = clientUpdate s x
-  sendState ([]   ) = return ()
+  sendState []      = return ()
   delay = P.liftIO $ threadDelay (Time.asTimeout r)
 
 -- send a JoinRequest that contains the client's nickname and the SendPort to receive simulation state updates

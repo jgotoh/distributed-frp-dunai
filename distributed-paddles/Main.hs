@@ -7,7 +7,7 @@ import           GameState
 --import           Input
 import           Network.Client
 import           Network.Common
-import           Network.Server
+import           Network.ForwardingServer
 import           Time
 import           Types
 
@@ -69,7 +69,7 @@ clientMain ip port nick name serverAddr = do
 
           print "Found Server"
 
-          ((Client pid sQ rQ), joinResult) <-
+          ((LocalClient pid sQ rQ), joinResult) <-
             (startClientProcess
               node
               server

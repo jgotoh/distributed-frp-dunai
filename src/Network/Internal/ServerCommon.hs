@@ -7,23 +7,22 @@ module Network.Internal.ServerCommon
   , joinRequest
   , ServerConfiguration(..)
   , serverProcess
-  , handleJoinRequest
-  , handleMonitorNotification
   , logTimeout
   , logShutdown
   , withoutClient
   , withoutClient'
   , broadcastUpdate
+  , addApiHandler
+  , addInfoHandler
+  , addExternHandler
   )
 where
 
 import           Control.Monad
-import           Control.Exception
 import qualified Control.Distributed.Process.ManagedProcess
                                                as MP
 import qualified Network.Socket                as N
-import           Network.Common          hiding ( Client )
-import qualified Network.Transport             as T
+import           Network.Common
 import           GHC.Generics                   ( Generic )
 import           Control.Distributed.Process.Extras.Internal.Types
 import qualified Control.Distributed.Process   as P
@@ -31,6 +30,8 @@ import qualified Control.Distributed.Process.Extras.Time
                                                as Time
 import qualified Control.Distributed.Process.Node
                                                as Node
+import qualified Control.Distributed.Process.ManagedProcess.Internal.Types
+                                               as MP
 
 type ServerProcessDefinition a = MP.ProcessDefinition (ServerState a)
 
@@ -62,6 +63,7 @@ joinRequest
   -> P.Process (JoinRequestResult [Nickname])
 joinRequest = MP.call
 
+-- Call to MP.serve, that monitors clients in initial state
 serverProcess
   :: (Binary a, Typeable a)
   => ServerProcessDefinition a
@@ -70,40 +72,8 @@ serverProcess
 serverProcess def s0 = MP.serve () initHandler def
  where
   initHandler _ = do
-    forM_ (serverStateSendPort <$> serverStateClient <$> s0) P.monitorPort
+    forM_ (serverStateSendPort . serverStateClient <$> s0) P.monitorPort
     return (MP.InitOk s0 Time.NoDelay)
-
--- TODO pass in function that decides whether request is accepted
-handleJoinRequest
-  :: (Binary a, Typeable a)
-  => MP.CallHandler
-       (ServerState a)
-       (JoinRequest a)
-       (JoinRequestResult [Nickname])
-handleJoinRequest s (JoinRequest nick serverStatePort) = do
-  P.liftIO $ print $ "new JoinRequest" ++ show serverStatePort
-  _ <- P.monitorPort (serverStateSendPort serverStatePort)
-  let s' = client : s
-  P.liftIO $ print $ "JoinRequest:: " ++ show s'
-  MP.reply (JoinRequestResult $ Right (JoinAccepted nicks)) s'
- where
-  client = Client nick serverStatePort
-  nicks  = map nameClient s
-
-handleMonitorNotification
-  :: MP.ActionHandler (ServerState a) P.PortMonitorNotification
-handleMonitorNotification s (P.PortMonitorNotification ref port reason) = do
-  P.liftIO
-    $  print
-    $  "client process died: "
-    ++ show port
-    ++ " reason: "
-    ++ show reason
-  P.liftIO $ print $ "new state: " ++ show s'
-
-  P.unmonitor ref
-  MP.continue s'
-  where s' = withoutClient' port s
 
 -- TODO summarize withoutClient[']. maybe via contramap
 withoutClient' :: P.SendPortId -> ServerState a -> ServerState a
@@ -139,3 +109,15 @@ broadcastUpdate clients msg = forM_ clients (serverUpdate msg)
 serverUpdate
   :: (Binary a, Typeable a) => StateUpdate a -> Client a -> P.Process ()
 serverUpdate m c = P.sendChan (serverStateSendPort (serverStateClient c)) m
+
+addApiHandler
+  :: MP.Dispatcher s -> MP.ProcessDefinition s -> MP.ProcessDefinition s
+addApiHandler h def = def { MP.apiHandlers = h : MP.apiHandlers def }
+
+addExternHandler
+  :: MP.ExternDispatcher s -> MP.ProcessDefinition s -> MP.ProcessDefinition s
+addExternHandler h def = def { MP.externHandlers = h : MP.externHandlers def }
+
+addInfoHandler
+  :: MP.DeferredDispatcher s -> MP.ProcessDefinition s -> MP.ProcessDefinition s
+addInfoHandler h def = def { MP.infoHandlers = h : MP.infoHandlers def }

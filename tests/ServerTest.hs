@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE DeriveGeneric #-}
 
 module ServerTest
@@ -7,14 +8,9 @@ where
 
 import           Control.Concurrent
 import           Control.Concurrent.STM
-import           Control.Exception       hiding ( catch )
-import           Control.Monad.Catch
 import           Control.Monad
-import           FRP.BearRiver
-import           Network.Common          hiding ( Client(..)
-                                                , Message(..)
-                                                )
-import           Network.AuthoritativeServer
+import           Network.Common
+import           Network.Server
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import qualified Control.Distributed.Process   as P
@@ -51,7 +47,7 @@ testConfiguration n =
 serverTests :: TestTree
 serverTests = withResource withNode clearNode tests
  where
-  withNode = initializeNode testIp testPort >>= \n -> case n of
+  withNode = initializeNode testIp testPort >>= \case
     Left  err        -> error $ show err
     Right nt@(n', _) -> do
       Node.runProcess n' $ do
@@ -97,23 +93,22 @@ testClientUpdates (n, _) = withServer
     -- Send StateUpdate without first connecting to the server
     -- the Server should ignore it
     clientUpdate sPid update
-    clientUpdate sPid update
     P.liftIO $ threadDelay 1000000
-    q <- P.liftIO . atomically . flushTQueue $ readQueue server
-    P.liftIO $ [] @=? q
+    updates <- P.liftIO . atomically . flushTQueue $ readQueue server
+    P.liftIO $ [] @=? updates
 
     -- Connect and send again
     _ <- joinRequest sPid join1
     clientUpdate sPid update
     P.liftIO $ threadDelay 1000000
-    q <- P.liftIO . atomically . flushTQueue $ readQueue server
-    P.liftIO $ [update] @=? q
+    updates' <- P.liftIO . atomically . flushTQueue $ readQueue server
+    P.liftIO $ [update] @=? updates'
 
     clientUpdate sPid update
     clientUpdate sPid update
     P.liftIO $ threadDelay 1000000
-    q <- P.liftIO . atomically . flushTQueue $ readQueue server
-    P.liftIO $ [update, update] @=? q
+    updates'' <- P.liftIO . atomically . flushTQueue $ readQueue server
+    P.liftIO $ [update, update] @=? updates''
 
 testDefaultServer :: (Node.LocalNode, T.Transport) -> Assertion
 testDefaultServer (n, _) = withServer
@@ -121,7 +116,7 @@ testDefaultServer (n, _) = withServer
   test
   n
  where
-  test server = do
+  test server =
     Node.runProcess n $ do
 
       let serverPid = pidServer server
@@ -141,9 +136,9 @@ testJoinRequests (n, _) = withServer (startServerProcess cfg) (test n) n
   cfg :: ServerConfiguration TestMessage
   cfg = (testConfiguration n) { joinConfig = twoClients }
   twoClients xs _ = return $ JoinRequestResult $ if length xs < 2
-    then (Right $ JoinAccepted $ nicks xs)
-    else (Left $ JoinError errorMsg)
-  nicks xs = map nameClient xs
+    then Right $ JoinAccepted $ nicks xs
+    else Left $ JoinError errorMsg
+  nicks = map nameClient
   errorMsg = "error message"
   nick1    = "1"
   nick2    = "2"
@@ -155,7 +150,7 @@ testJoinRequests (n, _) = withServer (startServerProcess cfg) (test n) n
     -- Create 3 Processes with SendPorts to connect to server
     (sp1v, sp1pid) <- P.liftIO $ testProcess n
     (sp2v, sp2pid) <- P.liftIO $ testProcess n
-    (sp3v, sp3pid) <- P.liftIO $ testProcess n
+    (sp3v, _     ) <- P.liftIO $ testProcess n
 
     sp1            <- P.liftIO $ atomically $ readTMVar sp1v
     sp2            <- P.liftIO $ atomically $ readTMVar sp2v
@@ -189,14 +184,14 @@ testJoinRequests (n, _) = withServer (startServerProcess cfg) (test n) n
     P.kill sp1pid "removing client 1"
     -- the notification the server receives when a client quits is delivered asynchronously, so we first wait an arbitrary amount of time
     P.liftIO $ threadDelay 1000000
-    state <- P.liftIO $ getState server
-    let expectedState = [expectedClient2]
-    P.liftIO $ expectedState @=? state
+    state' <- P.liftIO $ getState server
+    let expectedState' = [expectedClient2]
+    P.liftIO $ expectedState' @=? state'
 
     P.kill sp2pid "removing client 2"
     P.liftIO $ threadDelay 1000000
-    state <- P.liftIO $ getState server
-    P.liftIO $ [] @=? state
+    state'' <- P.liftIO $ getState server
+    P.liftIO $ [] @=? state''
 
 -- Starts a process that creates a channel for state exchanges and checks forever for incoming messages
 testProcess :: Node.LocalNode -> IO (TMVar (P.SendPort TestState), P.ProcessId)
@@ -223,7 +218,7 @@ withServer mkServer test n = do
   test server
   exitServer server
  where
-  exitServer s = do
+  exitServer s =
     Node.runProcess n
       $  exitProc s "exiting server via withServer"
       >> P.unregister testSession
