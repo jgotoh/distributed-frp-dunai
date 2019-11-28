@@ -34,7 +34,13 @@ clientUpdate
   :: (Addressable a, Binary m, Typeable m) => a -> StateUpdate m -> P.Process ()
 clientUpdate = MP.cast
 
-startServerProcess :: (Binary a, Typeable a) => N.HostName -> N.ServiceName -> String -> ServerProcessDefinition a -> IO ()
+startServerProcess
+  :: (Binary a, Typeable a)
+  => N.HostName
+  -> N.ServiceName
+  -> String
+  -> ServerProcessDefinition a
+  -> IO ()
 startServerProcess ip port name def = do
   Right transport <- NT.createTransport (NT.defaultTCPAddr ip port)
                                         NT.defaultTCPParameters
@@ -95,7 +101,7 @@ handleStateUpdate'
   :: (Binary a, Typeable a)
   => MP.ChannelHandler (ServerState a) (StateUpdate a) ()
 handleStateUpdate' port state msg = do
-  broadcastUpdate (withoutClient' sid state) msg 
+  broadcastUpdate (withoutClient' sid state) msg
   MP.continue state
   where sid = P.sendPortId port
 

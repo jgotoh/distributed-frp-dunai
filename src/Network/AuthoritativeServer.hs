@@ -20,7 +20,10 @@ import           Data.Binary                    ( Binary )
 import           FRP.BearRiver
 import           Type.Reflection
 import           Network.Common          hiding ( Client )
-import           Network.Internal.ServerCommon hiding (handleJoinRequest, handleMonitorNotification)
+import           Network.Internal.ServerCommon
+                                         hiding ( handleJoinRequest
+                                                , handleMonitorNotification
+                                                )
 import           Control.Concurrent
 import           Control.Concurrent.STM
 import           Control.Monad.Catch
@@ -151,6 +154,7 @@ sendStateProcess q s r = forever $ delay >> do
     xs <- flushTQueue q'
     return xs
   -- TODO sendState currently only sends the newest state. may even be necessary here?
+  -- TODO replace with TMVar. reactimateNet just needs to replace the value
   sendState css (x : _) = broadcastUpdate css x
   sendState _   ([]   ) = return ()
   delay = P.liftIO $ threadDelay (Time.asTimeout r)
@@ -181,8 +185,7 @@ startServerProcess cfg = do
         def' =
           addInfoHandler (MP.handleInfo $ handleMonitorNotification stateV) def
 
-      let def'' =
-            addApiHandler (MP.handleCast $ handleStateUpdate rQueue) def'
+      let def'' = addApiHandler (MP.handleCast $ handleStateUpdate rQueue) def'
 
       pid <- P.spawnLocal $ serverProcess def'' state0
 
@@ -190,7 +193,7 @@ startServerProcess cfg = do
 
       outPid <- P.liftIO $ Node.forkProcess
         node
-        (sendStateProcess sQueue server (Time.milliSeconds 16))
+        (sendStateProcess sQueue server (Time.milliSeconds 16)) --TODO pass in frequency via config
 
       P.link pid
       P.link outPid
@@ -254,7 +257,12 @@ handleStateUpdate
 handleStateUpdate q s m@(StateUpdate pid msg) = do
   when (pid `elem` (ids <$> s)) (writeQ m)
   MP.continue s
-  where
-    writeQ = P.liftIO . atomically . writeTQueue q
-    ids = (P.sendPortProcessId . P.sendPortId . serverStateSendPort . serverStateClient)
+ where
+  writeQ = P.liftIO . atomically . writeTQueue q
+  ids =
+    ( P.sendPortProcessId
+    . P.sendPortId
+    . serverStateSendPort
+    . serverStateClient
+    )
 

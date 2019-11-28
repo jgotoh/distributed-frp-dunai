@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 
 module Network.Client
-  (startClientProcess
+  ( startClientProcess
   , searchForServer
   , createServerStateChannel
   , runProcessResult
@@ -77,7 +77,9 @@ clientProcess node server rp rQueue sQueue = do
     Server pid -> P.link pid
 
   inPid  <- P.liftIO $ Node.forkProcess node (receiveStateProcess rQueue rp)
-  outPid <- P.liftIO $ Node.forkProcess node (sendStateProcess sQueue server (Time.milliSeconds 16))
+  outPid <- P.liftIO $ Node.forkProcess
+    node
+    (sendStateProcess sQueue server (Time.milliSeconds 16))
 
   P.link inPid
   P.link outPid
@@ -138,7 +140,11 @@ receiveStateProcess q p =
 
 -- Process to send StateUpdates to the server
 sendStateProcess
-  :: (Binary a, Typeable a) => TQueue (StateUpdate a) -> Server -> CommandRate -> P.Process ()
+  :: (Binary a, Typeable a)
+  => TQueue (StateUpdate a)
+  -> Server
+  -> CommandRate
+  -> P.Process ()
 sendStateProcess q s r = forever $ delay >> readQ q >>= sendState
  where
   readQ q' = P.liftIO . atomically $ do
@@ -146,7 +152,7 @@ sendStateProcess q s r = forever $ delay >> readQ q >>= sendState
     return xs
   -- TODO sendState currently only sends the newest state
   sendState (x : _) = clientUpdate s x
-  sendState ([]    ) = return ()
+  sendState ([]   ) = return ()
   delay = P.liftIO $ threadDelay (Time.asTimeout r)
 
 -- send a JoinRequest that contains the client's nickname and the SendPort to receive simulation state updates

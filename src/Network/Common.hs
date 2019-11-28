@@ -11,7 +11,7 @@ module Network.Common
   , JoinRequest(..)
   , JoinRequestResult(..)
   , JoinAccepted(..)
-  , JoinError (..)
+  , JoinError(..)
   , Server(..)
   , createLocalNode
   , initializeNode
@@ -29,6 +29,7 @@ module Network.Common
   )
 where
 
+-- TODO maybe rename to ClientCommon
 import           Control.Concurrent.STM.TQueue
 import qualified Control.Distributed.Process   as P
 import           Control.Distributed.Process.Extras
@@ -40,9 +41,11 @@ import           Control.Distributed.Process.Serializable
 import qualified Network.Transport.TCP         as NT
 import qualified Network.Socket                as N
 import           Control.Exception.Base         ( IOException )
-import           Data.Binary (Binary)
+import           Data.Binary                    ( Binary )
 import qualified Network.Transport             as T
-import           Network.Socket (HostName, ServiceName)
+import           Network.Socket                 ( HostName
+                                                , ServiceName
+                                                )
 import           Type.Reflection
 import           GHC.Generics                   ( Generic )
 
@@ -152,7 +155,9 @@ createLocalNode :: T.Transport -> IO Node.LocalNode
 createLocalNode transport = Node.newLocalNode transport Node.initRemoteTable
 
 initializeNode
-  :: N.HostName -> N.ServiceName -> IO (Either IOException (Node.LocalNode, T.Transport) )
+  :: N.HostName
+  -> N.ServiceName
+  -> IO (Either IOException (Node.LocalNode, T.Transport))
 initializeNode ip port = do
   -- TODO is Bifunctor.second usable here?
   t <- NT.createTransport (NT.defaultTCPAddr ip port) NT.defaultTCPParameters

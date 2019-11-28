@@ -68,9 +68,10 @@ serverProcess
   -> ServerState a
   -> P.Process ()
 serverProcess def s0 = MP.serve () initHandler def
-  where initHandler _ = do
-          forM_ (serverStateSendPort <$> serverStateClient <$> s0) P.monitorPort
-          return (MP.InitOk s0 Time.NoDelay)
+ where
+  initHandler _ = do
+    forM_ (serverStateSendPort <$> serverStateClient <$> s0) P.monitorPort
+    return (MP.InitOk s0 Time.NoDelay)
 
 -- TODO pass in function that decides whether request is accepted
 handleJoinRequest

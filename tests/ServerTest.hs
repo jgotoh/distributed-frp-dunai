@@ -11,7 +11,9 @@ import           Control.Exception       hiding ( catch )
 import           Control.Monad.Catch
 import           Control.Monad
 import           FRP.BearRiver
-import           Network.Common          hiding ( Client(..), Message(..))
+import           Network.Common          hiding ( Client(..)
+                                                , Message(..)
+                                                )
 import           Network.AuthoritativeServer
 import           Test.Tasty
 import           Test.Tasty.HUnit
@@ -66,14 +68,13 @@ tests mkNT = testGroup
   [ testCase "testing default configuration" $ mkNT >>= testDefaultServer
   , testCase "testing join requests" $ mkNT >>= testJoinRequests
   , testCase "testing clientUpdate" $ mkNT >>= testClientUpdates
-  -- , testCase "testing join requests" $ mkNT >>= testJoinRequests
-  -- , testCase "test simulating server" $ mkNT >>= testSimulatingServer
   ]
 
--- Tests a server that is running a simulation
+-- TODO Tests a server that is running a simulation
 -- Snapshots of the simulation (StateUpdate) are sent at a static rate
 -- s -> c updaterate
--- TODO usage should be analogous to Client!
+-- test sendStateProcess
+
 -- Tests whether updates sent by clientUpdate are correctly added to the receivingQueue of a server
 testClientUpdates :: (Node.LocalNode, T.Transport) -> Assertion
 testClientUpdates (n, _) = withServer
@@ -89,8 +90,8 @@ testClientUpdates (n, _) = withServer
     (sp1v, sp1pid) <- P.liftIO $ testProcess n
     sp1            <- P.liftIO . atomically $ readTMVar sp1v
 
-    let ssp1 = ServerStateSendPort sp1
-        join1 = JoinRequest nick1 ssp1
+    let ssp1   = ServerStateSendPort sp1
+        join1  = JoinRequest nick1 ssp1
         update = StateUpdate sp1pid Ping
 
     -- Send StateUpdate without first connecting to the server
@@ -216,6 +217,7 @@ withServer
   -> Node.LocalNode
   -> Assertion
 withServer mkServer test n = do
+  -- TODO use bracket
   server    <- mkServer
   (Right _) <- atomically $ readTMVar (pidApiServer server)
   test server
@@ -228,14 +230,14 @@ withServer mkServer test n = do
 
 -- TODO test:
 -- servers that run simulations themselves
--- test stateUpdate sending
+-- test sending of stateUpdates (s -> c)
 -- joining leaving simulations in progress
--- send state to clients
+-- # test clientUpdates are written to rQueue
 -- return initial state of world on join
 -- # library users can decide whether clients can join
 -- # servers need to be handle a varying amount of connected clients
 -- clients do not need to determine the destination of messages (responsibility of servers)
 -- users of the library need to be able to add new message types
--- state Updates are generic, users of the library can decide what types of data should be transmitted and how network data is processed
+-- # state Updates are generic, users of the library can decide what types of data should be transmitted and how network data is processed
 -- servers need way to run simulations themselves
 
