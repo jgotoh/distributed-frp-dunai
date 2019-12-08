@@ -1,8 +1,9 @@
 module ClientMain where
 
 import           Display
-import           Game
 import           GameState
+import           ClientGame
+import           ServerMain
 --import           Input
 import           Network.Client
 import           Network.Common
@@ -11,6 +12,7 @@ import           Types
 
 import           Control.Applicative
 --import           Control.Exception
+import           Control.Concurrent
 import           Control.Concurrent.STM.TQueue
 import           Control.Concurrent.STM.TMVar
 import qualified Control.Distributed.Process   as P
@@ -33,7 +35,7 @@ clientMain ip port nick session addr = do
   timeRef            <- createTimeRef
   Right (node, _)    <- initializeNode ip port
 
-  mServer            <- runProcessResult node (searchForServer session addr)
+  mServer            <- runProcessIO node (searchForServer session addr)
 
   case mServer of
     Nothing            -> error "Server could not be found"
@@ -42,7 +44,7 @@ clientMain ip port nick session addr = do
 
       print "Found Server"
 
-      ((LocalClient pid sQ rQ), joinResult) <-
+      ((LocalClient pid rQ sQ), joinResult) <-
         (startClientProcess
           node
           server
@@ -52,84 +54,72 @@ clientMain ip port nick session addr = do
 
       SDL.showWindow window
 
-      JoinRequestResult (Right (JoinAccepted cs)) <- atomically
+      JoinRequestResult (Right (JoinAccepted _)) <- atomically
         $ takeTMVar joinResult
 
-      -- TODO snapshot client -> current client state, blocks, produces firstGS
-      -- TODO then wait until session begins
-      -- TODO then wait until session begins
+      -- get initial GameSettings at time = 0
+      Just (Just gs) <- runProcessIO node (reqGameSettings server pid)
 
-      if null cs
-        then reactimateNet' (return $ GameInput Nothing)
-                            (sense timeRef)
-                            (actuate renderer)
-                            (runGameReader firstGS gameSF)
-                            (receiveState rQ)
-                            (writeState (hostANetState) sQ pid)
-        else reactimateNet' (return $ GameInput Nothing)
-                            (sense timeRef)
-                            (actuate renderer)
-                            (runGameReader secondGS remoteGameSF)
-                            (receiveState rQ)
-                            (writeState (hostBNetState) sQ pid)
+      setWindowTitle
+        window
+        (clientWindowTitle (localPlayerSettings gs) (remotePlayerSettings gs))
+
+      reactimateClient (return $ GameInput Nothing)
+                       (sense timeRef)
+                       (actuate renderer)
+                       (runGameReader gs clientSF)
+                       (receiveState rQ)
+                       (writeState getDir sQ pid)
 
       quit window renderer
- where
-  firstPlayer = PlayerSettings (SDL.V2 50 100)
-                               (SDL.V2 10 50)
-                               (SDL.V2 0 175)
-                               firstPlayerColor
-  ball = BallSettings (SDL.V2 200 150)
-                      4
-                      (SDL.V2 350 350)
-                      firstPlayerColor
-                      (SDL.V2 (-0.75) $ -0.12)
-  firstGS          = GameSettings firstPlayer secondPlayer ball
-  firstPlayerColor = SDL.V4 240 142 125 255
-  secondPlayer     = PlayerSettings (SDL.V2 300 100)
-                                    (SDL.V2 10 50)
-                                    (SDL.V2 0 175)
-                                    firstPlayerColor
-  secondGS = GameSettings secondPlayer firstPlayer ball
--- clientMain ip port nick serverName serverAddr = undefined
 
-hostANetState :: GameState -> NetState
-hostANetState gs = NetState ps ball
+clientWindowTitle :: PlayerSettings -> PlayerSettings -> String
+clientWindowTitle localP remoteP = if x localP < x remoteP
+  then "distributed-paddles: Left"
+  else "distributed-paddles: Right"
  where
-  ps   = localPlayerState gs
-  ball = Just $ ballState gs
-
-hostBNetState :: GameState -> NetState
-hostBNetState gs = NetState ps Nothing where ps = localPlayerState gs
+  x ps = case playerPosition0 ps of
+    SDL.V2 x' _ -> x'
 
 receiveState
-  :: TQueue (StateUpdate NetState) -> IO (Maybe (StateUpdate NetState))
-receiveState q = readQ q where readQ = atomically . tryReadTQueue
+  :: TQueue (UpdatePacket NetState) -> IO (Maybe (UpdatePacket NetState))
+receiveState q = do
+  in' <- readQ q
+  -- print in'
+  return in'
+  where readQ = atomically . tryReadTQueue
 
+getDir :: (DTime, GameInput) -> Maybe Command
+getDir = mkCommand . directionInput . snd where mkCommand = (Command <$>)
+
+-- TODO as library function, so user only has to write f
 writeState
-  :: (GameState -> NetState)
-  -> TQueue (StateUpdate NetState)
+  :: ((DTime, GameInput) -> Maybe Command)
+  -> TQueue (CommandPacket Command)
   -> P.ProcessId
-  -> GameState
+  -> (DTime, Maybe GameInput)
   -> IO ()
-writeState f q pid gs = do
-  -- TODO replace with sending network output states at a fixed rate (see FRP2016 paper)
-  --threadDelay 10000
-  atomically $ writeTQueue q $ StateUpdate pid $ f gs
+writeState f q pid (dt, mGi) = do
+  case mGi of
+    Nothing -> return ()
+    Just gi -> do
+      case f (dt, gi) of
+        Nothing -> return ()
+        Just c  -> atomically . writeTQueue q $ CommandPacket pid c
 
 runGameReader :: Monad m => GameSettings -> SF (GameEnv m) a b -> SF m a b
 runGameReader gs sf = readerS $ runReaderS_ (runReaderS sf) gs
 
 actuate :: SDL.Renderer -> p -> GameState -> IO Bool
-actuate renderer _ state = renderGameState renderer state >> return False
+actuate renderer _ state = do
+  renderGameState renderer state >> return False
 
 sense :: IORef DTime -> Bool -> IO (DTime, Maybe GameInput)
 sense timeRef _ = do
-  dtSecs <- senseTime timeRef
+  dtSecs <- fixedTimeStep 16.6 timeRef
   events <- SDL.pollEvents
   when (quitEvent events) exitSuccess
   dir <- direction
-  --print $ "dt: " ++ show dtSecs
   return (dtSecs, Just $ GameInput dir)
   where quitEvent events = elem SDL.QuitEvent $ map SDL.eventPayload events
 
@@ -168,7 +158,6 @@ drawState renderer state = do
   drawPlayer renderer $ firstPlayer state
   drawPlayer renderer $ secondPlayer state
   drawBall renderer $ ballState state
-  drawCircle renderer (SDL.V2 0 0) 30
  where
   firstPlayer  = localPlayerState
   secondPlayer = remotePlayerState

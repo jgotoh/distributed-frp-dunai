@@ -61,7 +61,7 @@ clientMain ip port nick name serverAddr = do
     Left  ex   -> error $ show ex
     Right (node, _) -> do
 
-      mServer <- runProcessResult node (searchForServer name serverAddr)
+      mServer <- runProcessIO node (searchForServer name serverAddr)
 
       case mServer of
         Nothing            -> error "Server could not be found"

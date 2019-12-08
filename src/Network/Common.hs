@@ -4,6 +4,9 @@
 module Network.Common
   ( HostName
   , ServiceName
+  , runProcessIO
+  , CommandPacket(..)
+  , UpdatePacket(..)
   , SessionName
   , Nickname
   , ServerStateSendPort(..)
@@ -21,17 +24,19 @@ module Network.Common
   , ServerStateChannel(..)
   , Port
   , ServerAddress
+  , Resolvable
   , serverStateSendPort
   , serverStateReceivePort
   , searchProcessTimeout
-  , StateUpdate(..)
   , Node.LocalNode
+  , resolveIO
   )
 where
 
 import qualified Control.Distributed.Process   as P
 import qualified Control.Distributed.Process.Extras.Time
                                                as Time
+import           Control.Distributed.Process.Extras.Internal.Types
 import qualified Control.Distributed.Process.Node
                                                as Node
 import           Control.Distributed.Process.Serializable
@@ -45,6 +50,8 @@ import           Network.Socket                 ( HostName
                                                 )
 import           Type.Reflection
 import           GHC.Generics                   ( Generic )
+import           Control.Concurrent.STM.TMVar
+import           Control.Monad.STM
 
 type Nickname = String
 type SessionName = String
@@ -52,19 +59,33 @@ type ServerAddress = String
 -- Port number
 type Port = Int
 
--- The frequency clients are sending StateUpdates
+-- The frequency clients are sending Commandpackets
 type CommandRate = Time.TimeInterval
 
--- Channel used by the server to send StateUpdates to clients
+-- Channel used by the server to send UpdatePackets to clients
 data ServerStateChannel a = ServerStateChannel (ServerStateSendPort a) (ServerStateReceivePort a)
 
--- Port used by a server to send StateUpdates to a client. Server -[state]-> Client
-newtype ServerStateSendPort a = ServerStateSendPort (P.SendPort (StateUpdate a))
+-- Port used by a server to send UpdatePackets to a client. Server -[state]-> Client
+newtype ServerStateSendPort a = ServerStateSendPort (P.SendPort (UpdatePacket a))
   deriving (Generic, Show, Typeable, Eq)
 instance Serializable a => Binary (ServerStateSendPort a)
 
--- Port used by a client to receive StateUpdates from a server. Server -[state]-> Client
-newtype ServerStateReceivePort a = ServerStateReceivePort (P.ReceivePort (StateUpdate a))
+instance Addressable (ServerStateSendPort a)
+
+instance Resolvable (ServerStateSendPort a) where
+  resolve a = case a of
+    ServerStateSendPort sp ->
+      return . Just . P.sendPortProcessId $ P.sendPortId sp
+  unresolvableMessage a =
+    "ServerStateSendPort could not be resolved: " ++ show a
+
+instance Routable (ServerStateSendPort a) where
+  sendTo s m = resolve s >>= maybe (error $ unresolvableMessage s) (`P.send` m)
+  unsafeSendTo s m =
+    resolve s >>= maybe (error $ unresolvableMessage s) (`P.unsafeSend` m)
+
+-- Port used by a client to receive UpdatePackets from a server. Server -[state]-> Client
+newtype ServerStateReceivePort a = ServerStateReceivePort (P.ReceivePort (UpdatePacket a))
   deriving (Generic)
 
 data JoinRequest a = JoinRequest Nickname (ServerStateSendPort a)
@@ -83,18 +104,31 @@ newtype JoinAccepted a = JoinAccepted a
   deriving (Generic, Show, Typeable, Eq)
 instance Serializable a => Binary (JoinAccepted a)
 
-data StateUpdate a = StateUpdate P.ProcessId a
-  deriving (Generic, Show, Typeable, Eq)
-instance Binary a => Binary (StateUpdate a)
+-- data StateUpdate a = StateUpdate P.ProcessId a
+--   deriving (Generic, Show, Typeable, Eq)
+-- instance Binary a => Binary (StateUpdate a)
 
-serverStateSendPort :: ServerStateSendPort a -> P.SendPort (StateUpdate a)
+data CommandPacket a = CommandPacket P.ProcessId a
+  deriving (Generic, Show, Typeable, Eq)
+instance Binary a => Binary (CommandPacket a)
+
+data UpdatePacket a = UpdatePacket P.ProcessId a
+  deriving (Generic, Show, Typeable, Eq)
+instance Binary a => Binary (UpdatePacket a)
+
+serverStateSendPort :: ServerStateSendPort a -> P.SendPort (UpdatePacket a)
 serverStateSendPort sp = case sp of
   ServerStateSendPort p -> p
 
 serverStateReceivePort
-  :: ServerStateReceivePort a -> P.ReceivePort (StateUpdate a)
+  :: ServerStateReceivePort a -> P.ReceivePort (UpdatePacket a)
 serverStateReceivePort rp = case rp of
   ServerStateReceivePort p -> p
+
+resolveIO :: Resolvable a => Node.LocalNode -> a -> IO (Maybe P.ProcessId)
+resolveIO n a = runProcessIO n (resolve a) >>= \mmx -> case mmx of
+  Nothing -> return Nothing
+  Just mx -> return mx
 
 -- Searches for a Process under address addr called name. When timeLeft runs out, returns Nothing
 searchProcessTimeout
@@ -127,15 +161,23 @@ createLocalNode :: T.Transport -> IO Node.LocalNode
 createLocalNode transport = Node.newLocalNode transport Node.initRemoteTable
 
 initializeNode
-  :: N.HostName
-  -> Port
-  -> IO (Either IOException (Node.LocalNode, T.Transport))
+  :: N.HostName -> Port -> IO (Either IOException (Node.LocalNode, T.Transport))
 initializeNode ip port = do
   -- TODO is Bifunctor.second usable here?
-  t <- NT.createTransport (NT.defaultTCPAddr ip (show port)) NT.defaultTCPParameters
+  t <- NT.createTransport (NT.defaultTCPAddr ip (show port))
+                          NT.defaultTCPParameters
   case t of
     Left  l -> return $ Left l
     Right r -> do
       n <- createLocalNode r
       return $ Right (n, r)
 
+-- runs a Process, blocks until it finishes. Result contains a value if the process did not terminate unexpected
+-- TODO catch exceptions
+runProcessIO :: Node.LocalNode -> P.Process a -> IO (Maybe a)
+runProcessIO node p = do
+  v <- newEmptyTMVarIO
+  Node.runProcess node $ do
+    result <- p
+    P.liftIO $ atomically $ putTMVar v result
+  atomically $ tryReadTMVar v

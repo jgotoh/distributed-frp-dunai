@@ -28,7 +28,7 @@ data TestMessage = Ping | Pong
   deriving (Generic, Show, Typeable, Eq)
 instance Binary TestMessage
 
-type TestState = StateUpdate TestMessage
+type TestUpdate = UpdatePacket TestMessage
 
 testIp :: HostName
 testIp = "localhost"
@@ -67,14 +67,16 @@ tests mkNT = testGroup
   ]
 
 -- TODO Tests a server that is running a simulation
--- Snapshots of the simulation (StateUpdate) are sent at a static rate
+-- Snapshots of the simulation (UpdatePacket) are sent at a static rate
 -- s -> c updaterate
 -- test sendStateProcess
 
--- Tests whether updates sent by clientUpdate are correctly added to the receivingQueue of a server
+-- Tests whether CommandPackets sent by clientUpdate are correctly added to the receivingQueue of a server
 testClientUpdates :: (Node.LocalNode, T.Transport) -> Assertion
 testClientUpdates (n, _) = withServer
-  (startServerProcess (testConfiguration n))
+  (startServerProcess (testConfiguration n) :: IO
+      (LocalServer TestMessage TestMessage)
+  )
   test
   n
  where
@@ -88,9 +90,9 @@ testClientUpdates (n, _) = withServer
 
     let ssp1   = ServerStateSendPort sp1
         join1  = JoinRequest nick1 ssp1
-        update = StateUpdate sp1pid Ping
+        update = CommandPacket sp1pid Ping
 
-    -- Send StateUpdate without first connecting to the server
+    -- Send CommandPacket without first connecting to the server
     -- the Server should ignore it
     clientUpdate sPid update
     P.liftIO $ threadDelay 1000000
@@ -112,33 +114,37 @@ testClientUpdates (n, _) = withServer
 
 testDefaultServer :: (Node.LocalNode, T.Transport) -> Assertion
 testDefaultServer (n, _) = withServer
-  (startServerProcess (testConfiguration n))
+  (startServerProcess (testConfiguration n) :: IO
+      (LocalServer TestMessage TestMessage)
+  )
   test
   n
  where
-  test server =
-    Node.runProcess n $ do
+  test server = Node.runProcess n $ do
 
-      let serverPid = pidServer server
-          vPid      = pidApiServer server
+    let serverPid = pidServer server
+        vPid      = pidApiServer server
 
-      (Right apiPid) <- P.liftIO $ atomically $ readTMVar vPid
-      main           <- isProcessAlive serverPid
-      api            <- isProcessAlive apiPid
+    (Right apiPid) <- P.liftIO $ atomically $ readTMVar vPid
+    main           <- isProcessAlive serverPid
+    api            <- isProcessAlive apiPid
 
-      P.liftIO $ main @? "main process is not active"
-      P.liftIO $ api @? "api process is not active"
+    P.liftIO $ main @? "main process is not active"
+    P.liftIO $ api @? "api process is not active"
 
 -- Tests handling of JoinRequests and monitoring of ServerStateSendPorts
 testJoinRequests :: (Node.LocalNode, T.Transport) -> Assertion
-testJoinRequests (n, _) = withServer (startServerProcess cfg) (test n) n
+testJoinRequests (n, _) = withServer
+  (startServerProcess cfg :: IO (LocalServer TestMessage TestMessage))
+  (test n)
+  n
  where
   cfg :: ServerConfiguration TestMessage
   cfg = (testConfiguration n) { joinConfig = twoClients }
   twoClients xs _ = return $ JoinRequestResult $ if length xs < 2
     then Right $ JoinAccepted $ nicks xs
     else Left $ JoinError errorMsg
-  nicks = map nameClient
+  nicks    = map nameClient
   errorMsg = "error message"
   nick1    = "1"
   nick2    = "2"
@@ -194,12 +200,12 @@ testJoinRequests (n, _) = withServer (startServerProcess cfg) (test n) n
     P.liftIO $ [] @=? state''
 
 -- Starts a process that creates a channel for state exchanges and checks forever for incoming messages
-testProcess :: Node.LocalNode -> IO (TMVar (P.SendPort TestState), P.ProcessId)
+testProcess :: Node.LocalNode -> IO (TMVar (P.SendPort TestUpdate), P.ProcessId)
 testProcess n = do
   v   <- newEmptyTMVarIO
   pid <- Node.forkProcess n $ do
     (sp, rp) <-
-      P.newChan :: P.Process (P.SendPort TestState, P.ReceivePort TestState)
+      P.newChan :: P.Process (P.SendPort TestUpdate, P.ReceivePort TestUpdate)
     P.liftIO . atomically $ putTMVar v sp
     P.linkPort sp
     forever $ P.receiveChan rp
@@ -207,8 +213,8 @@ testProcess n = do
 
 -- Create a server in a computation, pass it to the test and then shutdown the server
 withServer
-  :: IO (LocalServer a)
-  -> (LocalServer a -> Assertion)
+  :: IO (LocalServer a b)
+  -> (LocalServer a b -> Assertion)
   -> Node.LocalNode
   -> Assertion
 withServer mkServer test n = do

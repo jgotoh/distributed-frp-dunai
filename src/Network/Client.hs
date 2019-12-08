@@ -4,7 +4,6 @@ module Network.Client
   ( startClientProcess
   , searchForServer
   , createServerStateChannel
-  , runProcessResult
   , LocalClient(..)
   )
 where
@@ -27,9 +26,9 @@ import           Control.Monad.STM
 import           Data.ByteString.Char8
 import qualified Network.Transport             as T
 
-data LocalClient a = LocalClient { clientPid :: P.ProcessId
-                     , sendQueue :: TQueue (StateUpdate a)
-                     , readQueue :: TQueue (StateUpdate a)
+data LocalClient a b = LocalClient { clientPid :: P.ProcessId
+                     , readQueue :: TQueue (UpdatePacket a)
+                     , sendQueue :: TQueue (CommandPacket b)
                      }
 
 newtype Server = Server P.ProcessId
@@ -49,15 +48,15 @@ instance Routable Server where
 
 -- Starts a client, searches for a server and tries to join it
 startClientProcess
-  :: (Binary a, Typeable a)
+  :: (Binary a, Typeable a, Binary b, Typeable b)
   => Node.LocalNode
   -> Server
   -> String
   -> P.Process (ServerStateChannel a)
-  -> IO (LocalClient a, TMVar (JoinRequestResult [Nickname]))
+  -> IO (LocalClient a b, TMVar (JoinRequestResult [Nickname]))
 startClientProcess node server nick sChanP = do
-  sQueue <- newTQueueIO
-  rQueue <- newTQueueIO
+  rQueue <- newTQueueIO :: IO (TQueue (UpdatePacket a))
+  sQueue <- newTQueueIO :: IO (TQueue (CommandPacket b))
   rVar   <- newEmptyTMVarIO
   pid    <- Node.forkProcess node $ catch
     (do
@@ -75,17 +74,17 @@ startClientProcess node server nick sChanP = do
             clientProcess node server rp rQueue sQueue
     )
     (\e -> P.liftIO $ print $ show (e :: SomeException))
-  return (LocalClient pid sQueue rQueue, rVar) -- return $ (LocalClient _, CurrentState)
+  return (LocalClient pid rQueue sQueue, rVar) -- return $ (LocalClient _, CurrentState)
 
 -- TODO create something along the lines of P.ProcessDefinition for clients
 -- TODO cmdrate as argument
 clientProcess
-  :: (Binary a, Typeable a)
+  :: (Binary a, Typeable a, Binary b, Typeable b)
   => Node.LocalNode
   -> Server
   -> ServerStateReceivePort a
-  -> TQueue (StateUpdate a)
-  -> TQueue (StateUpdate a)
+  -> TQueue (UpdatePacket a)
+  -> TQueue (CommandPacket b)
   -> P.Process ()
 clientProcess node server rp rQueue sQueue = do
   P.liftIO $ print $ "LocalClient starts at: " ++ show
@@ -97,7 +96,7 @@ clientProcess node server rp rQueue sQueue = do
   inPid  <- P.liftIO $ Node.forkProcess node (receiveStateProcess rQueue rp)
   outPid <- P.liftIO $ Node.forkProcess
     node
-    (sendStateProcess sQueue server (Time.milliSeconds 16))
+    (sendStateProcess sQueue server (Time.milliSeconds 50))
 
   P.link inPid
   P.link outPid
@@ -106,7 +105,7 @@ clientProcess node server rp rQueue sQueue = do
   _ <- P.liftIO $ forever $ threadDelay 100000
   P.liftIO $ print "clientProcess ends"
 
--- Creates a typed channel used by servers to send StateUpdates to clients.
+-- Creates a typed channel used by servers to send UpdatePackets to clients.
 createServerStateChannel
   :: (Binary a, Typeable a) => P.Process (ServerStateChannel a)
 createServerStateChannel =
@@ -128,30 +127,21 @@ searchForServer name server = do
   serverEndpoint = T.EndPointAddress $ pack server
   serverNode     = P.NodeId serverEndpoint
 
--- runs a Process, blocks until it finishes. Result contains a value if the process did not terminate unexpected
--- TODO catch exceptions
-runProcessResult :: Node.LocalNode -> P.Process a -> IO (Maybe a)
-runProcessResult node p = do
-  v <- newEmptyTMVarIO
-  Node.runProcess node $ do
-    result <- p
-    P.liftIO $ atomically $ putTMVar v result
-  atomically $ tryReadTMVar v
 
--- Process to receive StateUpdates sent from the server
+-- Process to receive UpdatePackets sent from the server
 receiveStateProcess
   :: (Binary a, Typeable a)
-  => TQueue (StateUpdate a)
+  => TQueue (UpdatePacket a)
   -> ServerStateReceivePort a
   -> P.Process ()
 receiveStateProcess q p =
   forever $ P.receiveChan (serverStateReceivePort p) >>= writeQ
   where writeQ = P.liftIO . atomically . writeTQueue q
 
--- Process to send StateUpdates to the server
+-- Process to send CommandPackets to the server
 sendStateProcess
   :: (Binary a, Typeable a)
-  => TQueue (StateUpdate a)
+  => TQueue (CommandPacket a)
   -> Server
   -> CommandRate
   -> P.Process ()

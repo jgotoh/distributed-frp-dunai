@@ -62,7 +62,7 @@ clientMain ip port nick name serverAddr = do
     Left  ex   -> error $ show ex
     Right node -> do
 
-      mServer <- runProcessResult node (searchForServer name serverAddr)
+      mServer <- runProcessIO node (searchForServer name serverAddr)
 
       case mServer of
         Just (Just server) -> do

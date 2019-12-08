@@ -27,7 +27,8 @@ data GameSettings = GameSettings
   , remotePlayerSettings :: PlayerSettings
   , ballSettings :: BallSettings
   }
-  deriving (Show)
+  deriving (Generic, Show, Typeable)
+instance Binary GameSettings
 
 data PlayerSettings = PlayerSettings
   { playerPosition0 :: !Position
@@ -48,15 +49,18 @@ data BallSettings = BallSettings
   deriving (Generic, Show, Typeable)
 instance Binary BallSettings
 
+data Command = Command { dirCommand :: !Direction}
+  deriving (Generic, Show, Typeable)
+instance Binary Command
 
 data NetState = NetState
-  { playerNetState :: !PlayerState
-  , ballNetState :: !(Maybe BallState)
+  { localPlayerNetState :: !PlayerState
+  , remotePlayerNetState :: !PlayerState
+  , ballNetState :: !BallState
   }
   deriving (Generic, Show, Typeable)
 instance Binary NetState
 
--- TODO aggregate state records in ADT
 data GameState = GameState
   { localPlayerState :: PlayerState
   , remotePlayerState :: PlayerState

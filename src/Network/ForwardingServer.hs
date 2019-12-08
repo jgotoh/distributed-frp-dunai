@@ -29,9 +29,9 @@ import qualified Network.Transport             as T
 
 -- client facing API
 
--- Sends a StateUpdate
+-- Sends a CommandPacket
 clientUpdate
-  :: (Addressable a, Binary m, Typeable m) => a -> StateUpdate m -> P.Process ()
+  :: (Addressable a, Binary m, Typeable m) => a -> CommandPacket m -> P.Process ()
 clientUpdate = MP.cast
 
 startServerProcess
@@ -69,7 +69,7 @@ startServerProcess ip port name def = do
 serverProcessDef :: (Binary a, Typeable a) => ServerProcessDefinition a
 serverProcessDef = MP.defaultProcess
   { MP.apiHandlers            = [ MP.handleCall handleJoinRequest
-                                , MP.handleCast handleStateUpdate
+                                , MP.handleCast handleCommandPacket
                                 ]
   , MP.infoHandlers           = [MP.handleInfo handleMonitorNotification]
   , MP.exitHandlers           = []
@@ -79,14 +79,15 @@ serverProcessDef = MP.defaultProcess
   }
 
 
-handleStateUpdate
-  :: (Binary a, Typeable a) => MP.CastHandler (ServerState a) (StateUpdate a)
-handleStateUpdate s m = do
-  broadcastUpdate (withoutClient pid s) m
-  MP.continue s
- where
-  pid = case m of
-    StateUpdate pid' _ -> pid'
+handleCommandPacket
+  :: (Binary a, Typeable a) => MP.CastHandler (ServerState a) (CommandPacket a)
+handleCommandPacket = undefined
+-- handleCommandPacket s m = do
+--   broadcastUpdate (withoutClient pid s) m
+--   MP.continue s
+--  where
+--   pid = case m of
+--     CommandPacket pid' _ -> pid'
 
 -- TODO pass in function that decides whether request is accepted
 handleJoinRequest

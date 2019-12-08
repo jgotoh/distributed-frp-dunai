@@ -14,8 +14,10 @@ module Network.Internal.ServerCommon
   , broadcastUpdate
   , addApiHandler
   , addInfoHandler
+  , pidClient
   , addExternHandler
   , Node.LocalNode
+  , Resolvable(..)
   )
 where
 
@@ -53,6 +55,18 @@ data Client a = Client
 
 instance Show (Client a) where
   show c = "Client " ++ nameClient c ++ "," ++ show (serverStateClient c)
+
+instance Addressable (Client a)
+
+instance Resolvable (Client a) where
+  resolve a = case a of
+    Client _ sp -> resolve sp
+  unresolvableMessage a = "Client could not be resolved: " ++ show a
+
+instance Routable (Client a) where
+  sendTo s m = resolve s >>= maybe (error $ unresolvableMessage s) (`P.send` m)
+  unsafeSendTo s m =
+    resolve s >>= maybe (error $ unresolvableMessage s) (`P.unsafeSend` m)
 
 type ServerState a = [Client a]
 
@@ -95,6 +109,10 @@ hasIdentification :: P.ProcessId -> Client a -> Bool
 hasIdentification pid c = pid == P.sendPortProcessId
   (P.sendPortId $ serverStateSendPort $ serverStateClient c)
 
+pidClient :: Client a -> P.ProcessId
+pidClient =
+  P.sendPortProcessId . P.sendPortId . serverStateSendPort . serverStateClient
+
 logTimeout :: s -> Time.Delay -> MP.Action s
 logTimeout s delay = do
   when (delay /= Time.NoDelay) $ P.liftIO $ print $ "logTimeout: " ++ show delay
@@ -104,11 +122,11 @@ logShutdown :: MP.ExitState s -> ExitReason -> P.Process ()
 logShutdown _ reason = P.liftIO $ print $ "logShutdown: " ++ show reason
 
 broadcastUpdate
-  :: (Binary a, Typeable a) => [Client a] -> StateUpdate a -> P.Process ()
+  :: (Binary a, Typeable a) => [Client a] -> UpdatePacket a -> P.Process ()
 broadcastUpdate clients msg = forM_ clients (serverUpdate msg)
 
 serverUpdate
-  :: (Binary a, Typeable a) => StateUpdate a -> Client a -> P.Process ()
+  :: (Binary a, Typeable a) => UpdatePacket a -> Client a -> P.Process ()
 serverUpdate m c = P.sendChan (serverStateSendPort (serverStateClient c)) m
 
 addApiHandler

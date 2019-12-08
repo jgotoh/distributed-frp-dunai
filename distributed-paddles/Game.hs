@@ -11,31 +11,14 @@ import           Debug.Trace
 import           Control.Monad.Fix
 import           Control.Monad.Reader           ( lift )
 import           Control.Monad.Trans.MSF.Reader
+import           Data.MonadicStreamFunction.Extra
 import           FRP.BearRiver           hiding ( dot
                                                 , (^+^)
                                                 )
+import           FRP.BearRiver.Extra
 import           SDL.Vect                hiding ( identity
                                                 , trace
                                                 )
-import           Data.MonadicStreamFunction.InternalCore
-
--- TODO move to dunai/Extra.hs
--- | Well-formed looped connection of an output component as a future input.
--- Receives initial input via monadic action
-feedbackM :: Monad m => m c -> MSF m (a, c) (b, c) -> MSF m a b
-feedbackM act sf = MSF $ \a -> do
-  c               <- act
-  ((b', c'), sf') <- unMSF sf (a, c)
-  return (b', feedback c' sf')
-
--- TODO move to bearriver/Extra.hs
-edgeJust :: Monad m => SF m (Maybe a) (Event a)
-edgeJust = edgeBy isJustEdge (Just undefined)
- where
-  isJustEdge Nothing  Nothing     = Nothing
-  isJustEdge Nothing  ma@(Just _) = ma
-  isJustEdge (Just _) (   Just _) = Nothing
-  isJustEdge (Just _) Nothing     = Nothing
 
 -- TODO move
 arrTrace :: (Monad m, Show a) => MSF m a a
@@ -44,7 +27,7 @@ arrTrace = arr (\x -> trace (show x) x)
 -- executed by host that creates a session
 gameSF
   :: (Monad m, MonadFix m)
-  => SF (GameEnv m) (GameInput, (Maybe (StateUpdate NetState))) GameState
+  => SF (GameEnv m) (GameInput, (Maybe (CommandPacket NetState))) GameState
 gameSF = feedbackM act loopingGame
  where
   act = do
@@ -58,7 +41,7 @@ gameSF = feedbackM act loopingGame
 -- executed by host that joins a session
 remoteGameSF
   :: (Monad m, MonadFix m)
-  => SF (GameEnv m) (GameInput, (Maybe (StateUpdate NetState))) GameState
+  => SF (GameEnv m) (GameInput, (Maybe (CommandPacket NetState))) GameState
 remoteGameSF = feedbackM act remoteLoopingGame
  where
   act = do
@@ -73,7 +56,7 @@ loopingGame
   :: (Monad m)
   => SF
        (GameEnv m)
-       ((GameInput, (Maybe (StateUpdate NetState))), GameState)
+       ((GameInput, (Maybe (CommandPacket NetState))), GameState)
        (GameState, GameState)
 loopingGame =
   (arr gi_gs >>> morphS (selectEnv localPlayerSettings) localPlayerSF)
@@ -91,12 +74,11 @@ remoteLoopingGame
   :: (Monad m)
   => SF
        (GameEnv m)
-       ((GameInput, (Maybe (StateUpdate NetState))), GameState)
+       ((GameInput, (Maybe (CommandPacket NetState))), GameState)
        (GameState, GameState)
 remoteLoopingGame =
   (arr gi_gs >>> morphS (selectEnv localPlayerSettings) localPlayerSF)
     &&& (arr su_gs >>> morphS (selectEnv remotePlayerSettings) remotePlayerSF)
-  -- TODO unit test when StateUpdate is Nothing -> remote ball/ player are static
     &&& (arr su_gs >>> morphS (selectEnv ballSettings) remoteBallSF)
     >>> arr (\(ps, (ps', bs)) -> ((ps, ps'), bs))
     >>> arr ((uncurry . uncurry) GameState)
@@ -114,15 +96,15 @@ localPlayerSF = arr fst >>> arr directionInput >>> paddleSF
 
 remotePlayerSF
   :: (Monad m)
-  => SF (PlayerEnv m) ((Maybe (StateUpdate NetState)), GameState) PlayerState
+  => SF (PlayerEnv m) ((Maybe (CommandPacket NetState)), GameState) PlayerState
 remotePlayerSF = arr (uncurry mergePlayerState) >>> arr remotePlayerState
 
--- if StateUpdate is Nothing, use last GameState, otherwise update it
-mergePlayerState :: Maybe (StateUpdate NetState) -> GameState -> GameState
+-- if CommandPacket is Nothing, use last GameState, otherwise update it
+mergePlayerState :: Maybe (CommandPacket NetState) -> GameState -> GameState
 mergePlayerState mNS gs = case mNS of
   Nothing -> gs
-  Just (StateUpdate _ ns) -> case ns of
-    NetState ps _ -> gs {remotePlayerState = ps}
+  Just (CommandPacket _ ns) -> case ns of
+    NetState ps _ _ -> gs {remotePlayerState = ps}
 
 ballSF :: (Monad m) => SF (BallEnv m) GameState BallState
 ballSF =
@@ -130,17 +112,15 @@ ballSF =
 
 remoteBallSF
   :: Monad m
-  => SF (BallEnv m) ((Maybe (StateUpdate NetState)), GameState) BallState
+  => SF (BallEnv m) ((Maybe (CommandPacket NetState)), GameState) BallState
 remoteBallSF = arr (uncurry mergeStates) >>> arr ballState
 
--- if StateUpdate is Nothing, use last GameState, otherwise update it
-mergeStates :: Maybe (StateUpdate NetState) -> GameState -> GameState
+-- if CommandPacket is Nothing, use last GameState, otherwise update it
+mergeStates :: Maybe (CommandPacket NetState) -> GameState -> GameState
 mergeStates mNS gs = case mNS of
   Nothing                 -> gs
-  Just (StateUpdate _ ns) -> case ns of
-    NetState _ bs -> case bs of
-      Just bs' -> gs { ballState = bs' }
-      Nothing  -> gs
+  Just (CommandPacket _ ns) -> case ns of
+    NetState _ _ bs -> gs { ballState = bs }
 
 resolveCollisions :: Monad m => SF (BallEnv m) GameState [Event Collision]
 resolveCollisions =

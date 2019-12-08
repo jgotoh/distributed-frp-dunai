@@ -13,7 +13,8 @@ extra-source-files:  ChangeLog.md
 cabal-version:       >=1.10
 
 library
-  exposed-modules:   FRP.BearRiver.Extra
+  exposed-modules:   Data.MonadicStreamFunction.Extra
+                     FRP.BearRiver.Extra
                      Network.Client
                      Network.Common
                      Network.ForwardingServer
@@ -26,6 +27,7 @@ library
                        bearriver,
                        binary,
                        bytestring,
+                       containers,
                        distributed-process,
                        distributed-process-async,
                        distributed-process-client-server,
@@ -83,7 +85,12 @@ library examples-common
 
 executable distributed-paddles
   main-is:             Main.hs
-  other-modules:       Game, GameState
+  other-modules:       Game,
+                       GameState,
+                       ClientGame,
+                       ClientMain,
+                       ServerGame,
+                       ServerMain
 --  ghc-options:         -prof
 --                       -fprof-auto
   ghc-options:         -Wall
@@ -91,6 +98,7 @@ executable distributed-paddles
                        bearriver,
                        binary,
                        bytestring,
+                       containers,
                        distributed-process,
                        distributed-process-client-server,
                        distributed-process-extras,

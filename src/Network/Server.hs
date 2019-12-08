@@ -15,6 +15,10 @@ module Network.Server
   , Client(..)
   , HasState(..)
   , waitUntilState
+  , Resolvable(..)
+  , module Control.Distributed.Process.Extras
+  , addApiHandler
+  , Network.Internal.ServerCommon.pidClient
   )
 where
 import           Data.Binary                    ( Binary )
@@ -28,7 +32,7 @@ import           Control.Monad.State
 import qualified Control.Distributed.Process   as P
 import qualified Control.Distributed.Process.Extras.Time
                                                as Time
-import           Control.Distributed.Process.Extras.Internal.Types
+import           Control.Distributed.Process.Extras
 import qualified Control.Distributed.Process.ManagedProcess
                                                as MP
 import qualified Control.Distributed.Process.Node
@@ -41,41 +45,50 @@ import qualified Network.Socket                as N
 
 -- Sends a Command packet
 clientUpdate
-  :: (Addressable a, Binary m, Typeable m) => a -> StateUpdate m -> P.Process ()
+  :: (Addressable a, Binary m, Typeable m)
+  => a
+  -> CommandPacket m
+  -> P.Process ()
 clientUpdate = MP.cast
 
 -- TODO implement to avoid hardcoded values in distributed-paddles
 -- Requests a snapshot (current state) of the world
-snapshot :: (Addressable a, Binary m, Typeable m) => a -> P.ProcessId -> P.Process (StateUpdate m)
+snapshot
+  :: (Addressable a, Binary m, Typeable m)
+  => a
+  -> P.ProcessId
+  -> P.Process (UpdatePacket m)
 snapshot = MP.call
 
 -- server setup
 
-data LocalServer a = LocalServer {
+data LocalServer a b = LocalServer {
   pidServer :: P.ProcessId
   , pidApiServer :: TMVar (Either SomeException P.ProcessId)
-  , sendQueue :: TQueue (StateUpdate a)
-  , readQueue :: TQueue (StateUpdate a)
-  , stateServer :: TVar (ServerState a)
+  , sendQueue :: TQueue ([(P.SendPort (UpdatePacket b), UpdatePacket b)])
+  , readQueue :: TQueue (CommandPacket a)
+  , stateServer :: TVar (ServerState b)
   }
 
 class HasState a b | a -> b where
   getState :: a -> IO (ServerState b)
+  getStateSTM :: a -> STM (ServerState b)
 
-instance HasState (LocalServer a) a where
+instance HasState (LocalServer a b) b where
   getState ser = readTVarIO $ stateServer ser
+  getStateSTM ser = readTVar $ stateServer ser
 
-instance Show (LocalServer a) where
+instance Show (LocalServer a b) where
   show (LocalServer pid _ _ _ _) = "LocalServer{ pid=" ++ show pid ++ "}"
 
-instance Addressable (LocalServer a)
+instance Addressable (LocalServer a b)
 
-instance Resolvable (LocalServer a) where
+instance Resolvable (LocalServer a b) where
   resolve a = case a of
     LocalServer pid _ _ _ _ -> return $ Just pid
   unresolvableMessage a = "LocalServer could not be resolved: " ++ show a
 
-instance Routable (LocalServer a) where
+instance Routable (LocalServer a b) where
   sendTo s m = resolve s >>= maybe (error $ unresolvableMessage s) (`P.send` m)
   unsafeSendTo s m =
     resolve s >>= maybe (error $ unresolvableMessage s) (`P.unsafeSend` m)
@@ -128,33 +141,37 @@ handleMonitorNotification v s (P.PortMonitorNotification ref port reason) = do
 
 sendStateProcess
   :: (Binary a, Typeable a, HasState s a)
-  => TQueue (StateUpdate a)
+  => TQueue ([(P.SendPort (UpdatePacket a), UpdatePacket a)])
   -> s
   -> CommandRate
   -> P.Process ()
 sendStateProcess q s r = forever $ delay >> do
-  x  <- readQ q
-  cs <- P.liftIO $ getState s
-  sendState cs x
+  x <- readQ q
+  sendStates x
  where
   readQ q' = P.liftIO . atomically $ flushTQueue q'
-  -- TODO sendState currently only sends the newest state. may even be necessary here?
-  -- TODO replace with TMVar. reactimateNet just needs to replace the value
-  sendState css (x : _) = broadcastUpdate css x
-  sendState _   []      = return ()
+  -- TODO replace Queue with TMVar. reactimateNet just needs to replace the current value
   delay = P.liftIO $ threadDelay (Time.asTimeout r)
 
--- TODO implement
+sendStates
+  :: (Binary a, Typeable a)
+  => [[(P.SendPort (UpdatePacket a), UpdatePacket a)]]
+  -> P.Process ()
+sendStates msgs = forM_ msgs (\xs -> forM_ xs (uncurry P.sendChan))
+
 -- Blocks until the state satisfies a certain condition
 waitUntilState
-  :: (HasState s a)
-  => s -> (ServerState a -> Bool)
-  -> IO ()
-waitUntilState = undefined
+  :: (HasState s a) => s -> (ServerState a -> Bool) -> IO (ServerState a)
+waitUntilState hs f = atomically $ do
+  s <- getStateSTM hs
+  when (not $ f s) retry
+  return s
 
 -- Starts a server using the supplied config, writes into TMVar when start was successful
 startServerProcess
-  :: (Binary a, Typeable a) => ServerConfiguration a -> IO (LocalServer a)
+  :: (Binary a, Typeable a, Binary b, Typeable b)
+  => ServerConfiguration b
+  -> IO (LocalServer a b)
 startServerProcess cfg = do
   started <- newEmptyTMVarIO
   sQueue  <- newTQueueIO
@@ -178,7 +195,8 @@ startServerProcess cfg = do
         def' =
           addInfoHandler (MP.handleInfo $ handleMonitorNotification stateV) def
 
-      let def'' = addApiHandler (MP.handleCast $ handleStateUpdate rQueue) def'
+      let def'' =
+            addApiHandler (MP.handleCast $ handleCommandPacket rQueue) def'
 
       pid <- P.spawnLocal $ serverProcess def'' state0
 
@@ -186,7 +204,7 @@ startServerProcess cfg = do
 
       outPid <- P.liftIO $ Node.forkProcess
         node
-        (sendStateProcess sQueue server (Time.milliSeconds 16)) --TODO pass in frequency via config
+        (sendStateProcess sQueue server (Time.milliSeconds 50)) --TODO pass in frequency via config
 
       P.link pid
       P.link outPid
@@ -236,18 +254,19 @@ handleJoinRequest stateV resultP s req@(JoinRequest nick port) = do
         P.liftIO $ print $ "Declined, state: " ++ show s
         MP.reply result s
       Right _ -> do
-        let s' = client : s
+        -- appends client to end of state
+        let s' = s ++ [client]
         _ <- P.monitorPort (serverStateSendPort port)
         P.liftIO $ print $ "Accepted, state: " ++ show s'
         P.liftIO $ atomically $ writeTVar stateV s'
         MP.reply result s'
   where client = Client nick port
 
-handleStateUpdate
-  :: (Binary a, Typeable a)
-  => TQueue (StateUpdate a)
-  -> MP.CastHandler (ServerState a) (StateUpdate a)
-handleStateUpdate q s m@(StateUpdate pid _) = do
+handleCommandPacket
+  :: (Binary a, Typeable a, Binary b, Typeable b)
+  => TQueue (CommandPacket a)
+  -> MP.CastHandler (ServerState b) (CommandPacket a)
+handleCommandPacket q s m@(CommandPacket pid _) = do
   when (pid `elem` (ids <$> s)) (writeQ m)
   MP.continue s
  where
