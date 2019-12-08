@@ -4,22 +4,17 @@ import           Display
 import           GameState
 import           ClientGame
 import           ServerMain
---import           Input
 import           Network.Client
 import           Network.Common
 import           Time
 import           Types
 
 import           Control.Applicative
---import           Control.Exception
-import           Control.Concurrent
 import           Control.Concurrent.STM.TQueue
 import           Control.Concurrent.STM.TMVar
 import qualified Control.Distributed.Process   as P
 
---import           Control.Distributed.Process.Extras.Time
 import           Control.Monad
---import Control.Monad.Reader (lift)
 import           Control.Monad.STM
 import           Control.Monad.Trans.MSF.Reader
 import           Data.IORef
@@ -35,43 +30,39 @@ clientMain ip port nick session addr = do
   timeRef            <- createTimeRef
   Right (node, _)    <- initializeNode ip port
 
-  mServer            <- runProcessIO node (searchForServer session addr)
+  Just server      <- runProcessIO node (searchForServer session addr)
+    >>= \s -> return $ join s
 
-  case mServer of
-    Nothing            -> error "Server could not be found"
-    Just (Nothing    ) -> error "Server could not be found"
-    Just (Just server) -> do
+  print "Found Server"
 
-      print "Found Server"
+  ((LocalClient pid rQ sQ), joinResult) <-
+    (startClientProcess
+      node
+      server
+      nick
+      (createServerStateChannel :: P.Process (ServerStateChannel NetState))
+    )
 
-      ((LocalClient pid rQ sQ), joinResult) <-
-        (startClientProcess
-          node
-          server
-          nick
-          (createServerStateChannel :: P.Process (ServerStateChannel NetState))
-        )
+  SDL.showWindow window
 
-      SDL.showWindow window
+  JoinRequestResult (Right (JoinAccepted _)) <- atomically
+    $ takeTMVar joinResult
 
-      JoinRequestResult (Right (JoinAccepted _)) <- atomically
-        $ takeTMVar joinResult
+  -- get initial GameSettings at time = 0
+  Just gs <- runProcessIO node (reqGameSettings server pid) >>= \s -> return $ join s
 
-      -- get initial GameSettings at time = 0
-      Just (Just gs) <- runProcessIO node (reqGameSettings server pid)
+  setWindowTitle
+    window
+    (clientWindowTitle (localPlayerSettings gs) (remotePlayerSettings gs))
 
-      setWindowTitle
-        window
-        (clientWindowTitle (localPlayerSettings gs) (remotePlayerSettings gs))
+  reactimateClient (return $ GameInput Nothing)
+                   (sense timeRef)
+                   (actuate renderer)
+                   (runGameReader gs remoteClientSF)
+                   (receiveState rQ)
+                   (writeState getDir sQ pid)
 
-      reactimateClient (return $ GameInput Nothing)
-                       (sense timeRef)
-                       (actuate renderer)
-                       (runGameReader gs remoteClientSF)
-                       (receiveState rQ)
-                       (writeState getDir sQ pid)
-
-      quit window renderer
+  quit window renderer
 
 clientWindowTitle :: PlayerSettings -> PlayerSettings -> String
 clientWindowTitle localP remoteP = if x localP < x remoteP
