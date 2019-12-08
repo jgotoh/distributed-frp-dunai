@@ -67,7 +67,7 @@ clientMain ip port nick session addr = do
       reactimateClient (return $ GameInput Nothing)
                        (sense timeRef)
                        (actuate renderer)
-                       (runGameReader gs clientSF)
+                       (runGameReader gs remoteClientSF)
                        (receiveState rQ)
                        (writeState getDir sQ pid)
 
