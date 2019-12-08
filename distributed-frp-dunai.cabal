@@ -17,7 +17,6 @@ library
                      FRP.BearRiver.Extra
                      Network.Client
                      Network.Common
-                     Network.ForwardingServer
                      Network.Server
 
   other-modules:     Network.Internal.ServerCommon
@@ -85,7 +84,7 @@ library examples-common
 
 executable distributed-paddles
   main-is:             Main.hs
-  other-modules:       Game,
+  other-modules:       
                        GameState,
                        ClientGame,
                        ClientMain,
