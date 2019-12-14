@@ -1,5 +1,9 @@
 # Distributed Systems Extensions for the Dunai FRP Library
 
+This library provides a Client/ Server infrastructure by using [Cloud Haskell](https://haskell-distributed.github.io/)for distributed FRP applications implemented with [Dunai/ BearRiver](https://github.com/ivanperez-keera/dunai).
+
+Will also support synchronisation techniques sometime in the future.
+
 ## distributed-paddles
 
 `distributed-paddles` is an example application inspired by PONG&trade; (Atari Interactive, Inc., 1972).
@@ -29,6 +33,8 @@ To exit the session, press again any key.
 ### Profiling
 
 To automatically run a server with two hosts that join using profiling, run `run_profiling`.
+
+See comments in the file to actually get it to run.
 
 ## hlint
 
