@@ -96,7 +96,7 @@ clientProcess node server rp rQueue sQueue = do
   inPid  <- P.liftIO $ Node.forkProcess node (receiveStateProcess rQueue rp)
   outPid <- P.liftIO $ Node.forkProcess
     node
-    (sendStateProcess sQueue server (Time.milliSeconds 50))
+    (sendStateProcess sQueue server (Time.milliSeconds 0))
 
   P.link inPid
   P.link outPid

@@ -51,7 +51,6 @@ clientUpdate
   -> P.Process ()
 clientUpdate = MP.cast
 
--- TODO implement to avoid hardcoded values in distributed-paddles
 -- Requests a snapshot (current state) of the world
 snapshot
   :: (Addressable a, Binary m, Typeable m)
@@ -204,7 +203,7 @@ startServerProcess cfg = do
 
       outPid <- P.liftIO $ Node.forkProcess
         node
-        (sendStateProcess sQueue server (Time.milliSeconds 50)) --TODO pass in frequency via config
+        (sendStateProcess sQueue server (Time.milliSeconds 1)) --TODO pass in frequency via config
 
       P.link pid
       P.link outPid

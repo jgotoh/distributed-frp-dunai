@@ -90,9 +90,9 @@ executable distributed-paddles
                        ClientMain,
                        ServerGame,
                        ServerMain
---  ghc-options:         -prof
---                       -fprof-auto
   ghc-options:         -Wall
+                       -prof
+                       -fprof-auto
   build-depends:       base,
                        bearriver,
                        binary,

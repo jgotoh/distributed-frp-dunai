@@ -33,6 +33,12 @@ CLIENTA_PS=distributed-paddlesA.ps
 CLIENTB_PS=distributed-paddlesB.ps
 
 # Available options: https://downloads.haskell.org/~ghc/7.4.1/docs/html/users_guide/prof-heap.html#rts-options-heap-prof
+# -hc : cost-centre stack
+# -hm : module containing the code
+# -hd : closure description (constructor name)
+# -hy : by type description
+# -hr : retainer set
+# -hb : biography
 PROFILE=-hr
 
 cp $SERVER_PATH $CLIENTA_PATH
