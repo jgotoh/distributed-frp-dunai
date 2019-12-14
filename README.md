@@ -20,6 +20,8 @@ To join with a nickname `A`, receiving messages on port `3001`:
 
 `cabal new-run distributed-paddles -- --ip 127.0.0.1 --p 3001 --name name --s 127.0.0.1:3000:0 --nick A`
 
+Paddles can be moved up and down by pressing arrow keys.
+
 ### Simple startup
 
 To run a server with `n` hosts that join, run `run_test n`, e.g `run_test 2`. 
