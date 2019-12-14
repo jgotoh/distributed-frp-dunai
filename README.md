@@ -1,6 +1,6 @@
 # Distributed Systems Extensions for the Dunai FRP Library
 
-This library provides a Client/ Server infrastructure by using [Cloud Haskell](https://haskell-distributed.github.io/)for distributed FRP applications implemented with [Dunai/ BearRiver](https://github.com/ivanperez-keera/dunai).
+This library provides a Client/ Server infrastructure by using [Cloud Haskell](https://haskell-distributed.github.io/) for distributed FRP applications implemented with [Dunai/ BearRiver](https://github.com/ivanperez-keera/dunai).
 
 Will also support synchronisation techniques sometime in the future.
 
@@ -59,8 +59,4 @@ All Haskell source files are formatted via [Brittany](https://github.com/lspitzn
 
 ## network-transport-tcp
 
-The library uses a modified version of the package `network-transport-tcp`. The modified version updated the `network` dependency to version 3 and removed the upper bounds of the `async` package to support newer versions of GHC.
-
-However removing the upper bounds of `async` lead to a failed test (TestTCP.hs:testUnnecessaryConnect), so extra care should be taken to not reconnect to a socket already connected to.
-
-
+The library uses a modified version of the package `network-transport-tcp` with an updated dependency to the `network` package to version 3.
