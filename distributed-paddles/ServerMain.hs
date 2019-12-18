@@ -148,13 +148,16 @@ writeState
   :: (  GameState
      -> [(P.SendPort (UpdatePacket NetState), UpdatePacket NetState)]
      )
-  -> TQueue [(P.SendPort (UpdatePacket NetState), UpdatePacket NetState)]
+  -> TMVar [(P.SendPort (UpdatePacket NetState), UpdatePacket NetState)]
   -> GameState
   -> IO ()
 writeState f q gs = do
   let out = f gs
-  -- print out
-  atomically . writeTQueue q $ out
+  atomically . replaceTMVar q $ out
+
+-- Empties a TMVar, then writes a new value
+replaceTMVar :: TMVar a -> a -> STM ()
+replaceTMVar = tryTakeTMVar >> putTMVar
 
 sense :: IORef DTime -> Bool -> IO (DTime, Maybe a)
 sense timeRef _ = do

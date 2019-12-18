@@ -64,7 +64,7 @@ snapshot = MP.call
 data LocalServer a b = LocalServer {
   pidServer :: P.ProcessId
   , pidApiServer :: TMVar (Either SomeException P.ProcessId)
-  , sendQueue :: TQueue ([(P.SendPort (UpdatePacket b), UpdatePacket b)])
+  , sendQueue :: TMVar ([(P.SendPort (UpdatePacket b), UpdatePacket b)])
   , readQueue :: TQueue (CommandPacket a)
   , stateServer :: TVar (ServerState b)
   }
@@ -140,23 +140,22 @@ handleMonitorNotification v s (P.PortMonitorNotification ref port reason) = do
 
 sendStateProcess
   :: (Binary a, Typeable a, HasState s a)
-  => TQueue ([(P.SendPort (UpdatePacket a), UpdatePacket a)])
+  => TMVar ([(P.SendPort (UpdatePacket a), UpdatePacket a)])
   -> s
   -> CommandRate
   -> P.Process ()
-sendStateProcess q s r = forever $ delay >> do
-  x <- readQ q
+sendStateProcess v s r = forever $ delay >> do
+  x <- readV v
   sendStates x
  where
-  readQ q' = P.liftIO . atomically $ flushTQueue q'
-  -- TODO replace Queue with TMVar. reactimateNet just needs to replace the current value
+  readV v' = P.liftIO . atomically $ takeTMVar v'
   delay = P.liftIO $ threadDelay (Time.asTimeout r)
 
 sendStates
   :: (Binary a, Typeable a)
-  => [[(P.SendPort (UpdatePacket a), UpdatePacket a)]]
+  => [(P.SendPort (UpdatePacket a), UpdatePacket a)]
   -> P.Process ()
-sendStates msgs = forM_ msgs (\xs -> forM_ xs (uncurry P.sendChan))
+sendStates msgs = forM_ msgs (uncurry P.sendChan)
 
 -- Blocks until the state satisfies a certain condition
 waitUntilState
@@ -173,7 +172,7 @@ startServerProcess
   -> IO (LocalServer a b)
 startServerProcess cfg = do
   started <- newEmptyTMVarIO
-  sQueue  <- newTQueueIO
+  sVar  <- newEmptyTMVarIO
   rQueue  <- newTQueueIO
   stateV  <- newTVarIO state0
   pid     <- Node.forkProcess node $ catch
@@ -199,11 +198,11 @@ startServerProcess cfg = do
 
       pid <- P.spawnLocal $ serverProcess def'' state0
 
-      let server = LocalServer mainPid started sQueue rQueue stateV
+      let server = LocalServer mainPid started sVar rQueue stateV
 
       outPid <- P.liftIO $ Node.forkProcess
         node
-        (sendStateProcess sQueue server (Time.milliSeconds 1)) --TODO pass in frequency via config
+        (sendStateProcess sVar server (Time.milliSeconds 1)) --TODO pass in frequency via config
 
       P.link pid
       P.link outPid
@@ -228,7 +227,7 @@ startServerProcess cfg = do
       P.liftIO $ print $ show (e :: SomeException)
       throwM e
     )
-  return $ LocalServer pid started sQueue rQueue stateV
+  return $ LocalServer pid started sVar rQueue stateV
  where
   node   = nodeConfig cfg
   state0 = []
