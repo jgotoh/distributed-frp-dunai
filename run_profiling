@@ -1,8 +1,9 @@
 #!/bin/bash
 
-trap "trap - SIGTERM && kill -- -$BASHPID" SIGINT SIGTERM EXIT
-
 # Convenience script to execute distributed paddles with a server and two hosts using profiling.
+# Press any key to start the clients after the server has started.
+# Press again any key to kill the processes.
+# hp2ps is used to render profiling graphs, see $SERVER_PS, $CLIENTA_PS and $CLIENTB_PS for results.
 # To build the applicaion with profiling, enable ghc-options "-prof" and "-fprof-auto" in distributed-frp-dunai.cabal
 # Also the file cabal.project.local may be modified to contain the following line
 # profiling: True
@@ -12,23 +13,27 @@ trap "trap - SIGTERM && kill -- -$BASHPID" SIGINT SIGTERM EXIT
 # Running a profiled program called x always writes its output to x.hp.
 # The workaround used here is to execute different copies of the executable.
 
-PATH_EXE=dist-newstyle/build/x86_64-linux/ghc-8.2.1/distributed-frp-dunai-0.1.0.0/x/distributed-paddles/build/distributed-paddles/
+PATH_EXE=dist-newstyle/build/x86_64-linux/ghc-8.2.2/distributed-frp-dunai-0.1.0.0/x/distributed-paddles/build/distributed-paddles/
 
-SERVER=distributed-paddles
+# The executables
+DEFAULT=distributed-paddles
+SERVER=distributed-paddlesS
 CLIENTA=distributed-paddlesA
 CLIENTB=distributed-paddlesB
 
+# Paths of executables
+DEFAULT_PATH=${PATH_EXE}${DEFAULT}
 SERVER_PATH=${PATH_EXE}${SERVER}
-
 CLIENTA_PATH=${PATH_EXE}${CLIENTA}
-
 CLIENTB_PATH=${PATH_EXE}${CLIENTB}
 
-SERVER_HP=distributed-paddles.hp
+# Paths of hp files
+SERVER_HP=distributed-paddlesS.hp
 CLIENTA_HP=distributed-paddlesA.hp
 CLIENTB_HP=distributed-paddlesB.hp
 
-SERVER_PS=distributed-paddles.ps
+# Files to contain the profiling graphs
+SERVER_PS=distributed-paddlesS.ps
 CLIENTA_PS=distributed-paddlesA.ps
 CLIENTB_PS=distributed-paddlesB.ps
 
@@ -39,11 +44,12 @@ CLIENTB_PS=distributed-paddlesB.ps
 # -hy : by type description
 # -hr : retainer set
 # -hb : biography
-PROFILE=-hr
+PROFILE=-hc
 
-cp $SERVER_PATH $CLIENTA_PATH
-
-cp $SERVER_PATH $CLIENTB_PATH
+# Create the executables
+cp $DEFAULT_PATH $SERVER_PATH
+cp $DEFAULT_PATH $CLIENTA_PATH
+cp $DEFAULT_PATH $CLIENTB_PATH
 
 echo $SERVER_PATH
 
@@ -63,6 +69,10 @@ PORT=3002
 ./$CLIENTB_PATH +RTS -p -s $PROFILE -RTS --ip 127.0.0.1 --p $PORT --name name --s 127.0.0.1:3000:0 --nick 2 | sed "s/^/[Client2] /" &
 
 read -n 1 -s -r -p $'Press any key to exit\n'
+
+kill -SIGINT %1
+kill -SIGINT %2
+kill -SIGINT %3
 
 # convert hp to ps
 
