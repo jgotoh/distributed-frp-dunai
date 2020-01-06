@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Network.Server
   ( clientUpdate
@@ -22,6 +23,7 @@ module Network.Server
   )
 where
 import           Data.Binary                    ( Binary )
+import           Data.IORef
 import           Type.Reflection
 import           Network.Common
 import           Network.Internal.ServerCommon
@@ -39,6 +41,7 @@ import qualified Control.Distributed.Process.Node
                                                as Node
 -- import           Control.Monad
 import qualified Network.Socket                as N
+import           Data.Time
 -- import qualified Network.Transport.TCP         as NT
 
 -- client facing API
@@ -92,6 +95,7 @@ instance Routable (LocalServer a b) where
   unsafeSendTo s m =
     resolve s >>= maybe (error $ unresolvableMessage s) (`P.unsafeSend` m)
 
+-- default ServerConfiguration that accepts every JoinRequest.
 defaultServerConfig
   :: (Binary a, Typeable a)
   => Node.LocalNode
@@ -110,6 +114,7 @@ defaultServerConfig node ip port name def = ServerConfiguration
     \s _ -> return $ JoinRequestResult $ Right $ JoinAccepted $ map nameClient s
   }
 
+-- default ProcessDefinition that terminates on unhandled messages, logs timeouts and shutdowns.
 defaultFRPProcessDefinition
   :: (Binary a, Typeable a) => ServerProcessDefinition a
 defaultFRPProcessDefinition = MP.defaultProcess
@@ -121,41 +126,66 @@ defaultFRPProcessDefinition = MP.defaultProcess
   , MP.unhandledMessagePolicy = MP.Terminate
   }
 
-
-handleMonitorNotification
-  :: TVar [Client a]
-  -> MP.ActionHandler (ServerState a) P.PortMonitorNotification
-handleMonitorNotification v s (P.PortMonitorNotification ref port reason) = do
-  P.liftIO
-    $  print
-    $  "client process died: "
-    ++ show port
-    ++ " reason: "
-    ++ show reason
-  P.liftIO $ print $ "new state: " ++ show s'
-  P.liftIO $ atomically $ writeTVar v s'
-  P.unmonitor ref
-  MP.continue s'
-  where s' = withoutClient' port s
-
-sendStateProcess
-  :: (Binary a, Typeable a, HasState s a)
-  => TMVar ([(P.SendPort (UpdatePacket a), UpdatePacket a)])
-  -> s
-  -> CommandRate
+-- Process that periodically distributes messages read from v to UpdateSender processes csvX.
+sendStateProcessSTM
+  :: (Binary b, Typeable b)
+  => ( TMVar (P.SendPort (UpdatePacket b), UpdatePacket b)
+     , TMVar (P.SendPort (UpdatePacket b), UpdatePacket b)
+     )
+  -> TMVar [(P.SendPort (UpdatePacket b), UpdatePacket b)]
+  -> Time.TimeInterval
   -> P.Process ()
-sendStateProcess v s r = forever $ delay >> do
-  x <- readV v
-  sendStates x
+sendStateProcessSTM (csv1, csv2) v r = do
+  timeRef <- P.liftIO $ createTimeRef
+  forever $ delay >> do
+    msgs <- readV v
+    now  <- P.liftIO $ getCurrentTime
+    sendSenderSTM (csv1, csv2) msgs
+    then' <- P.liftIO $ getCurrentTime
+    P.liftIO $ print $ "send via sender took: " ++ show (diffUTCTime then' now)
+    -- TODO sense time and block for frequency - dt!
+    dt <- P.liftIO $ senseTime timeRef
+    P.liftIO . print $ "Process send rate:" ++ show dt
+    return ()
  where
   readV v' = P.liftIO . atomically $ takeTMVar v'
   delay = P.liftIO $ threadDelay (Time.asTimeout r)
 
-sendStates
-  :: (Binary a, Typeable a)
-  => [(P.SendPort (UpdatePacket a), UpdatePacket a)]
+-- Send messages to UpdateSender processes.
+sendSenderSTM
+  :: (Binary b, Typeable b)
+  => ( TMVar (P.SendPort (UpdatePacket b), UpdatePacket b)
+     , TMVar (P.SendPort (UpdatePacket b), UpdatePacket b)
+     )
+  -> [(P.SendPort (UpdatePacket b), UpdatePacket b)]
   -> P.Process ()
-sendStates msgs = forM_ msgs (uncurry P.sendChan)
+-- sendSenderSTM (csp1, csp2) [msg1] = writeV csp1 msg1
+sendSenderSTM (csp1, csp2) [msg1, msg2] = do
+  writeV csp1 msg1
+  writeV csp2 msg2
+  where writeV v m = P.liftIO . atomically $ putTMVar v m
+
+-- UpdateSender. Spawn a process that sends messages on a typed channel. Messages to send are transmitted via the returned TMVar.
+updateSenderSTM
+  :: (Binary b, Typeable b)
+  => P.Process (TMVar (P.SendPort (b), b), P.ProcessId)
+updateSenderSTM = do
+  v   <- P.liftIO $ newEmptyTMVarIO
+  pid <- P.spawnLocal . forever $ do
+    msg <- readVar v
+    uncurry P.sendChan msg
+  return (v, pid)
+  where readVar v = P.liftIO . atomically $ takeTMVar v
+
+createTimeRef :: IO (IORef UTCTime)
+createTimeRef = getCurrentTime >>= newIORef
+
+senseTime :: IORef UTCTime -> IO NominalDiffTime
+senseTime timeRef = do
+  newTime      <- getCurrentTime
+  previousTime <- readIORef timeRef
+  writeIORef timeRef $ newTime
+  return $ diffUTCTime newTime previousTime
 
 -- Blocks until the state satisfies a certain condition
 waitUntilState
@@ -167,12 +197,13 @@ waitUntilState hs f = atomically $ do
 
 -- Starts a server using the supplied config, writes into TMVar when start was successful
 startServerProcess
-  :: (Binary a, Typeable a, Binary b, Typeable b)
+  :: forall a b
+   . (Binary a, Typeable a, Binary b, Typeable b)
   => ServerConfiguration b
   -> IO (LocalServer a b)
 startServerProcess cfg = do
   started <- newEmptyTMVarIO
-  sVar  <- newEmptyTMVarIO
+  sVar    <- newEmptyTMVarIO
   rQueue  <- newTQueueIO
   stateV  <- newTVarIO state0
   pid     <- Node.forkProcess node $ catch
@@ -200,9 +231,11 @@ startServerProcess cfg = do
 
       let server = LocalServer mainPid started sVar rQueue stateV
 
-      outPid <- P.liftIO $ Node.forkProcess
-        node
-        (sendStateProcess sVar server (Time.milliSeconds 1)) --TODO pass in frequency via config
+      (csv1, _) <- updateSenderSTM
+      (csv2, _) <- updateSenderSTM
+
+      outPid    <- P.spawnLocal
+        (sendStateProcessSTM (csv1, csv2) sVar (Time.milliSeconds 32))
 
       P.link pid
       P.link outPid
@@ -232,6 +265,7 @@ startServerProcess cfg = do
   node   = nodeConfig cfg
   state0 = []
 
+-- runs resultP to decide whether req is accepted. Accepted clients will be added to the end of the current state. Result will be sent to the client.
 handleJoinRequest
   :: (Binary a, Typeable a)
   => TVar [Client a]
@@ -252,7 +286,6 @@ handleJoinRequest stateV resultP s req@(JoinRequest nick port) = do
         P.liftIO $ print $ "Declined, state: " ++ show s
         MP.reply result s
       Right _ -> do
-        -- appends client to end of state
         let s' = s ++ [client]
         _ <- P.monitorPort (serverStateSendPort port)
         P.liftIO $ print $ "Accepted, state: " ++ show s'
@@ -271,4 +304,20 @@ handleCommandPacket q s m@(CommandPacket pid _) = do
   writeQ = P.liftIO . atomically . writeTQueue q
   ids =
     P.sendPortProcessId . P.sendPortId . serverStateSendPort . serverStateClient
+
+handleMonitorNotification
+  :: TVar [Client a]
+  -> MP.ActionHandler (ServerState a) P.PortMonitorNotification
+handleMonitorNotification v s (P.PortMonitorNotification ref port reason) = do
+  P.liftIO
+    $  print
+    $  "client process died: "
+    ++ show port
+    ++ " reason: "
+    ++ show reason
+  P.liftIO $ print $ "new state: " ++ show s'
+  P.liftIO $ atomically $ writeTVar v s'
+  P.unmonitor ref
+  MP.continue s'
+  where s' = withoutClient' port s
 

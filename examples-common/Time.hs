@@ -20,7 +20,7 @@ senseTime timeRef = do
 
 -- Implements a fixed time step of x ms. Blocks until x ms have elapsed
 fixedTimeStep :: Double -> IORef DTime -> IO DTime
-fixedTimeStep millis timeRef = do
+fixedTimeStep step timeRef = do
   newTime      <- SDL.getPerformanceCounter
   freq         <- SDL.getPerformanceFrequency
   previousTime <- readIORef timeRef
@@ -28,15 +28,20 @@ fixedTimeStep millis timeRef = do
   let dtSecs = (fromIntegral newTime - previousTime) / fromIntegral freq
 
   -- last frame took dtSecs to compute
-  let block  = truncate ((millisToMicros (millis)) - (secondsToMicros dtSecs))
+  let block  = truncate ((millisToMicros (step)) - (secondsToMicros dtSecs))
 
   -- blocking time is < 0 if the last frame took too long to compute
   -- we now have to block until the next frame
   -- see Jason Gregory, Game Engine Architecture, 2nd. Edition, p.351: Governing the Frame Rate
   if block < 0
     then do
-      threadDelay $ truncate $ millisToMicros millis + fromIntegral block
+      -- let blockingTime =
+      -- print $ "last frame took: " ++ show dtSecs ++ "now blocking for: " ++ show block
+      -- threadDelay $ truncate $ millisToMicros step + fromIntegral block
+      -- TODO step + block as blocking time is wrong here
+      return ()
     else do
+      -- print $ "blocking " ++ show block ++ "frame took: " ++ show dtSecs
       threadDelay $ block
 
   -- new dtSecs after threadDelay

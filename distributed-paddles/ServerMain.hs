@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE BangPatterns #-}
 
 module ServerMain
   ( reqGameSettings
@@ -9,6 +10,8 @@ where
 import           Control.Concurrent
 import           Data.List
 import           Control.Monad.STM
+import           Control.Monad
+import           Control.Applicative
 import           Control.Concurrent.STM.TMVar
 import           Control.Concurrent.STM.TQueue
 import qualified Data.Map.Strict               as Map
@@ -98,7 +101,7 @@ serverMain ip p n = do
       pidB  = P.sendPortProcessId $ P.sendPortId portB
       pids  = Map.fromList [(LocalPlayer, pidA), (RemotePlayer, pidB)]
 
-  -- reactimate, gather inputs of clients, send cmdpackets (= snapshot of whole world)
+  -- reactimate, gather inputs of clients, send UpdatePackets (= snapshots of whole world)
   reactimateServer
     (return undefined) -- equivalent to initial GameInput, not needed here
     (sense timeRef) -- get the DTime
@@ -109,15 +112,9 @@ serverMain ip p n = do
     (receiveState rQ) -- get CommandPackets
     (writeState (createNetStates portA portB api) sQ) -- create UpdatePackets
 
-orange :: Color
-orange = SDL.V4 240 142 125 255
+  SDL.quit
 
-green :: Color
-green = SDL.V4 130 161 59 255
-
-darkBlue :: Color
-darkBlue = SDL.V4 51 90 161 255
-
+-- TODO replace TQueue with TMVar (NonEmpty Command) to avoid need to flush
 receiveState
   :: Control.Concurrent.STM.TQueue.TQueue (CommandPacket Command)
   -> IO (Maybe [CommandPacket Command])
@@ -136,8 +133,11 @@ createNetStates
   -> P.ProcessId
   -> GameState
   -> [(P.SendPort (UpdatePacket NetState), UpdatePacket NetState)]
-createNetStates portA portB server gs = (fmap . fmap) (UpdatePacket server)
-                                                      [playerA, playerB]
+createNetStates !portA !portB server !gs = (fmap . fmap)
+  (UpdatePacket server)
+  [playerA, playerB]
+  -- [playerA, playerB, playerB, playerB, playerB, playerB, playerB, playerB, playerB, playerB, playerB, playerB, playerB, playerB, playerB]
+
  where
   playerA = (portA, aState)
   playerB = (portB, bState)
@@ -157,13 +157,30 @@ writeState f q gs = do
 
 -- Empties a TMVar, then writes a new value
 replaceTMVar :: TMVar a -> a -> STM ()
-replaceTMVar = tryTakeTMVar >> putTMVar
+replaceTMVar v a = do
+  empty <- isEmptyTMVar v
+  if empty
+    then putTMVar v a
+    else do
+      _ <- takeTMVar v
+      putTMVar v a
 
 sense :: IORef DTime -> Bool -> IO (DTime, Maybe a)
 sense timeRef _ = do
   dtSecs <- fixedTimeStep 16.6 timeRef
+  -- dtSecs <- senseTime timeRef
+  -- print $ "IO dtSecs: " ++ show dtSecs
   return (dtSecs, Nothing)
 
 runGameReader :: Monad m => GameSettings -> SF (GameEnv m) a b -> SF m a b
 runGameReader gs sf = readerS $ runReaderS_ (runReaderS sf) gs
+
+orange :: Color
+orange = SDL.V4 240 142 125 255
+
+green :: Color
+green = SDL.V4 130 161 59 255
+
+darkBlue :: Color
+darkBlue = SDL.V4 51 90 161 255
 
