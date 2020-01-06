@@ -43,7 +43,7 @@ import qualified Network.Socket                as N
 import           Data.Time
 -- import qualified Network.Transport.TCP         as NT
 
--- client facing API
+-- client facing API --
 
 -- Sends a Command packet
 clientUpdate
@@ -53,7 +53,7 @@ clientUpdate
   -> P.Process ()
 clientUpdate = MP.cast
 
--- server setup
+-- server setup --
 
 data LocalServer a b = LocalServer {
   pidServer :: P.ProcessId
@@ -117,76 +117,6 @@ defaultFRPProcessDefinition = MP.defaultProcess
   , MP.unhandledMessagePolicy = MP.Terminate
   }
 
--- Process that periodically distributes messages read from v to UpdateSender processes csvX.
-sendStateProcessSTM
-  :: (Binary b, Typeable b)
-  => ( TMVar (P.SendPort (UpdatePacket b), UpdatePacket b)
-     , TMVar (P.SendPort (UpdatePacket b), UpdatePacket b)
-     )
-  -> TMVar [(P.SendPort (UpdatePacket b), UpdatePacket b)]
-  -> Time.TimeInterval
-  -> P.Process ()
-sendStateProcessSTM (csv1, csv2) v r = do
-  -- timeRef <- P.liftIO $ createTimeRef
-  forever $ delay >> do
-    msgs <- readV v
-    -- now  <- P.liftIO $ getCurrentTime
-    sendSenderSTM (csv1, csv2) msgs
-    -- then' <- P.liftIO $ getCurrentTime
-    -- P.liftIO $ print $ "send via sender took: " ++ show (diffUTCTime then' now)
-    -- TODO sense time and block for frequency - dt!
-    -- dt <- P.liftIO $ senseTime timeRef
-    -- P.liftIO . print $ "Process send rate:" ++ show dt
-    return ()
- where
-  readV v' = P.liftIO . atomically $ takeTMVar v'
-  delay = P.liftIO $ threadDelay (Time.asTimeout r)
-
--- Send messages to UpdateSender processes.
-sendSenderSTM
-  :: (Binary b, Typeable b)
-  => ( TMVar (P.SendPort (UpdatePacket b), UpdatePacket b)
-     , TMVar (P.SendPort (UpdatePacket b), UpdatePacket b)
-     )
-  -> [(P.SendPort (UpdatePacket b), UpdatePacket b)]
-  -> P.Process ()
--- sendSenderSTM (csp1, csp2) [msg1] = writeV csp1 msg1
-sendSenderSTM (csp1, csp2) [msg1, msg2] = do
-  writeV csp1 msg1
-  writeV csp2 msg2
-  where writeV v m = P.liftIO . atomically $ putTMVar v m
-
--- UpdateSender. Spawn a process that sends messages on a typed channel. Messages to send are transmitted via the returned TMVar.
-updateSenderSTM
-  :: (Binary b, Typeable b)
-  => P.Process (TMVar (P.SendPort (b), b), P.ProcessId)
-updateSenderSTM = do
-  v   <- P.liftIO $ newEmptyTMVarIO
-  pid <- P.spawnLocal . forever $ do
-    msg <- readVar v
-    uncurry P.sendChan msg
-  return (v, pid)
-  where readVar v = P.liftIO . atomically $ takeTMVar v
-
--- TODO move next two functions into separate module
-createTimeRef :: IO (IORef UTCTime)
-createTimeRef = getCurrentTime >>= newIORef
-
-senseTime :: IORef UTCTime -> IO NominalDiffTime
-senseTime timeRef = do
-  newTime      <- getCurrentTime
-  previousTime <- readIORef timeRef
-  writeIORef timeRef $ newTime
-  return $ diffUTCTime newTime previousTime
-
--- Blocks until the state satisfies a certain condition
-waitUntilState
-  :: (HasState s a) => s -> (ServerState a -> Bool) -> IO (ServerState a)
-waitUntilState hs f = atomically $ do
-  s <- getStateSTM hs
-  when (not $ f s) retry
-  return s
-
 -- Starts a server using the supplied config, writes into TMVar when start was successful
 startServerProcess
   :: forall a b
@@ -195,7 +125,7 @@ startServerProcess
   -> IO (LocalServer a b)
 startServerProcess cfg = do
   started <- newEmptyTMVarIO
-  sVar    <- newEmptyTMVarIO
+  sendVar <- newEmptyTMVarIO
   rQueue  <- newTQueueIO
   stateV  <- newTVarIO state0
   pid     <- Node.forkProcess node $ catch
@@ -221,13 +151,13 @@ startServerProcess cfg = do
 
       pid <- P.spawnLocal $ serverProcess def'' state0
 
-      let server = LocalServer mainPid started sVar rQueue stateV
+      let server = LocalServer mainPid started sendVar rQueue stateV
 
-      (csv1, _) <- updateSenderSTM
-      (csv2, _) <- updateSenderSTM
+      -- TODO create/ destroy Updaters dynamically when clients join/ quit
+      updaters <- (fmap . fmap . fmap) fst spawnUpdateProcesses 2
 
-      outPid    <- P.spawnLocal
-        (sendStateProcessSTM (csv1, csv2) sVar (Time.milliSeconds 32))
+      outPid   <- P.spawnLocal
+        (sendStateProcessSTM updaters sendVar (Time.milliSeconds 32))
 
       P.link pid
       P.link outPid
@@ -252,10 +182,101 @@ startServerProcess cfg = do
       P.liftIO $ print $ show (e :: SomeException)
       throwM e
     )
-  return $ LocalServer pid started sVar rQueue stateV
+  return $ LocalServer pid started sendVar rQueue stateV
  where
   node   = nodeConfig cfg
   state0 = []
+
+
+-- Sending of Updates --
+
+-- Process that periodically distributes messages read from v to UpdateProcesses.
+-- TODO sense time and block for frequency - dt!
+sendStateProcessSTM
+  :: (Binary b, Typeable b)
+  => [TMVar (P.SendPort (UpdatePacket b), UpdatePacket b)] -- UpdateProcesses that send
+  -> TMVar [(P.SendPort (UpdatePacket b), UpdatePacket b)] -- Updates to send
+  -> Time.TimeInterval
+  -> P.Process ()
+sendStateProcessSTM updaters v r = do
+  -- timeRef <- P.liftIO $ createTimeRef
+  forever $ delay >> do
+    msgs <- readV v
+    -- now  <- P.liftIO $ getCurrentTime
+    -- sendUpdate (csv1, csv2) msgs
+    sendUpdates updaters msgs
+    -- then' <- P.liftIO $ getCurrentTime
+    -- P.liftIO $ print $ "send via sender took: " ++ show (diffUTCTime then' now)
+    -- dt <- P.liftIO $ senseTime timeRef
+    -- P.liftIO . print $ "Process send rate:" ++ show dt
+    return ()
+ where
+  readV v' = P.liftIO . atomically $ takeTMVar v'
+  delay = P.liftIO $ threadDelay (Time.asTimeout r)
+
+-- Send Updates to list of UpdateProcesses by writing to their TMVars.
+-- UpdateProcesses are cycled through, so if the number of messages exceeds the number of UpdateProcesses, some will send multiple messages.
+sendUpdates
+  :: (Binary b, Typeable b)
+  => [TMVar (P.SendPort b, b)]
+  -> [(P.SendPort b, b)]
+  -> P.Process ()
+sendUpdates updaters ms = forM_ zipped (uncurry writeV)
+ where
+  zipped = zip (cycle updaters) ms
+  writeV v m = P.liftIO . atomically $ putTMVar v m
+
+-- Spawn a number of UpdateProcesses
+spawnUpdateProcesses
+  :: (Binary b, Typeable b)
+  => Integer
+  -> P.Process [(TMVar (P.SendPort b, b), P.ProcessId)]
+spawnUpdateProcesses n = forM [1 .. n] (\_ -> spawnUpdateProcess)
+
+-- Spawn a process that sends messages on a typed channel. Messages to send are transmitted via the returned TMVar. Process can be quit via the returned ProcessId.
+spawnUpdateProcess
+  :: (Binary b, Typeable b)
+  => P.Process (TMVar (P.SendPort (b), b), P.ProcessId)
+spawnUpdateProcess = do
+  v   <- P.liftIO $ newEmptyTMVarIO
+  pid <- P.spawnLocal $ updateProcess v
+  return (v, pid)
+
+-- Never ending process to send updates to SendPorts as soon as they are available in the TMVar.
+updateProcess
+  :: (Binary b, Typeable b) => TMVar (P.SendPort b, b) -> P.Process ()
+updateProcess v = forever $ do
+  msg <- readVar v
+  uncurry P.sendChan msg
+  where readVar = P.liftIO . atomically . takeTMVar
+
+
+-- Sensing time --
+
+-- TODO move next two functions into separate module
+createTimeRef :: IO (IORef UTCTime)
+createTimeRef = getCurrentTime >>= newIORef
+
+senseTime :: IORef UTCTime -> IO NominalDiffTime
+senseTime timeRef = do
+  newTime      <- getCurrentTime
+  previousTime <- readIORef timeRef
+  writeIORef timeRef $ newTime
+  return $ diffUTCTime newTime previousTime
+
+
+-- Other functions --
+
+-- Blocks until the state satisfies a certain condition
+waitUntilState
+  :: (HasState s a) => s -> (ServerState a -> Bool) -> IO (ServerState a)
+waitUntilState hs f = atomically $ do
+  s <- getStateSTM hs
+  when (not $ f s) retry
+  return s
+
+
+-- Api Handlers --
 
 -- runs resultP to decide whether req is accepted. Accepted clients will be added to the end of the current state. Result will be sent to the client.
 handleJoinRequest
