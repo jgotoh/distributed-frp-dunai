@@ -5,7 +5,6 @@
 module Network.Server
   ( clientUpdate
   , joinRequest
-  , snapshot
   , ServerConfiguration(..)
   , ServerProcessDefinition
   , ServerState
@@ -53,14 +52,6 @@ clientUpdate
   -> CommandPacket m
   -> P.Process ()
 clientUpdate = MP.cast
-
--- Requests a snapshot (current state) of the world
-snapshot
-  :: (Addressable a, Binary m, Typeable m)
-  => a
-  -> P.ProcessId
-  -> P.Process (UpdatePacket m)
-snapshot = MP.call
 
 -- server setup
 
@@ -136,16 +127,16 @@ sendStateProcessSTM
   -> Time.TimeInterval
   -> P.Process ()
 sendStateProcessSTM (csv1, csv2) v r = do
-  timeRef <- P.liftIO $ createTimeRef
+  -- timeRef <- P.liftIO $ createTimeRef
   forever $ delay >> do
     msgs <- readV v
-    now  <- P.liftIO $ getCurrentTime
+    -- now  <- P.liftIO $ getCurrentTime
     sendSenderSTM (csv1, csv2) msgs
-    then' <- P.liftIO $ getCurrentTime
-    P.liftIO $ print $ "send via sender took: " ++ show (diffUTCTime then' now)
+    -- then' <- P.liftIO $ getCurrentTime
+    -- P.liftIO $ print $ "send via sender took: " ++ show (diffUTCTime then' now)
     -- TODO sense time and block for frequency - dt!
-    dt <- P.liftIO $ senseTime timeRef
-    P.liftIO . print $ "Process send rate:" ++ show dt
+    -- dt <- P.liftIO $ senseTime timeRef
+    -- P.liftIO . print $ "Process send rate:" ++ show dt
     return ()
  where
   readV v' = P.liftIO . atomically $ takeTMVar v'
@@ -177,6 +168,7 @@ updateSenderSTM = do
   return (v, pid)
   where readVar v = P.liftIO . atomically $ takeTMVar v
 
+-- TODO move next two functions into separate module
 createTimeRef :: IO (IORef UTCTime)
 createTimeRef = getCurrentTime >>= newIORef
 

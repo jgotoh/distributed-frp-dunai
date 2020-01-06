@@ -4,14 +4,17 @@
 module ServerMain
   ( reqGameSettings
   , serverMain
+  , darkBlue
+  , orange
+  , green
   )
 where
 
-import           Control.Concurrent
+-- import           Control.Concurrent
 import           Data.List
 import           Control.Monad.STM
 import           Control.Monad
-import           Control.Applicative
+-- import           Control.Applicative
 import           Control.Concurrent.STM.TMVar
 import           Control.Concurrent.STM.TQueue
 import qualified Data.Map.Strict               as Map
@@ -114,18 +117,11 @@ serverMain ip p n = do
 
   SDL.quit
 
--- TODO replace TQueue with TMVar (NonEmpty Command) to avoid need to flush
 receiveState
   :: Control.Concurrent.STM.TQueue.TQueue (CommandPacket Command)
   -> IO (Maybe [CommandPacket Command])
-receiveState q = flushQ q >>= \xs -> do
-  -- print xs
-  toMaybe xs
- where
-  flushQ = atomically . flushTQueue
-  toMaybe xs = case xs of
-    [] -> return Nothing
-    _  -> return $ Just xs
+receiveState = (next' >=> (\c -> return $ pure <$> c))
+  where next' = atomically . tryReadTQueue
 
 createNetStates
   :: P.SendPort (UpdatePacket NetState)
@@ -158,8 +154,8 @@ writeState f q gs = do
 -- Empties a TMVar, then writes a new value
 replaceTMVar :: TMVar a -> a -> STM ()
 replaceTMVar v a = do
-  empty <- isEmptyTMVar v
-  if empty
+  empty' <- isEmptyTMVar v
+  if empty'
     then putTMVar v a
     else do
       _ <- takeTMVar v
