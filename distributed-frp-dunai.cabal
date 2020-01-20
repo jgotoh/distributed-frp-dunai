@@ -95,8 +95,8 @@ executable distributed-paddles
                        ServerGame,
                        ServerMain
   ghc-options:         -Wall
-                       -prof
-                       -fprof-auto
+--                       -prof
+--                       -fprof-auto
   build-depends:       base,
                        bearriver,
                        binary,

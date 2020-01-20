@@ -4,3 +4,9 @@ source-repository-package
     type: git
     location: https://github.com/boggledekoog/network-transport-tcp.git
     tag: 1eca169e3713d1c1c810f324908f22f6fc7e6465
+
+source-repository-package
+    type: git
+    location: https://github.com/patrickt/distributed-process
+    tag: dcebbeb844a9a7ffe8e48839fca56ff0f2a919b6
+
