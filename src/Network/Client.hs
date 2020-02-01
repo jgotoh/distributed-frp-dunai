@@ -3,6 +3,7 @@
 module Network.Client
   ( startClientProcess
   , searchForServer
+  , searchForServerEndPoint
   , createServerStateChannel
   , LocalClient(..)
   )
@@ -96,7 +97,7 @@ clientProcess node server rp rQueue sQueue = do
   inPid  <- P.liftIO $ Node.forkProcess node (receiveStateProcess rQueue rp)
   outPid <- P.liftIO $ Node.forkProcess
     node
-    (sendStateProcess sQueue server (Time.milliSeconds 0))
+    (sendStateProcess sQueue server (Time.milliSeconds 20))
 
   P.link inPid
   P.link outPid
@@ -114,6 +115,16 @@ createServerStateChannel =
     )
     <$> P.newChan
 
+searchForServerEndPoint :: T.Transport -> String -> String -> IO ()
+searchForServerEndPoint transport name server = do
+  -- Right endpoint <- T.newEndPoint transport
+
+  -- let addr = T.EndPointAddress (pack server)
+
+  -- Right conn <- T.connect endpoint addr T.ReliableOrdered T.defaultConnectHints
+  -- Right () <- T.send conn [pack "hallo"]
+  return ()
+
 searchForServer :: String -> String -> P.Process (Maybe Server)
 searchForServer name server = do
   P.liftIO
@@ -122,7 +133,7 @@ searchForServer name server = do
     ++ name
     ++ " - "
     ++ show serverNode
-  (fmap . fmap) Server (searchProcessTimeout name serverNode 1000)
+  (fmap . fmap) Server (searchProcessTimeout name serverNode 5000)
  where
   serverEndpoint = T.EndPointAddress $ pack server
   serverNode     = P.NodeId serverEndpoint

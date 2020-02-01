@@ -180,6 +180,7 @@ testJoinRequests (n, _) = withServer
     -- test getState
     state <- P.liftIO $ getState server
 
+    -- TODO expected list should be independent of order
     let expectedClient1 = Client nick1 ssp1
         expectedClient2 = Client nick2 ssp2
         expectedState   = [expectedClient2, expectedClient1]

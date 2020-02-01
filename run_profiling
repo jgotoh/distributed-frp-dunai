@@ -1,4 +1,5 @@
 #!/bin/bash
+# TODO cabal build before anything here 
 
 # Convenience script to execute distributed paddles with a server and two hosts using profiling.
 # Press any key to start the clients after the server has started.
@@ -31,6 +32,11 @@ CLIENTB_PATH=${PATH_EXE}${CLIENTB}
 SERVER_HP=distributed-paddlesS.hp
 CLIENTA_HP=distributed-paddlesA.hp
 CLIENTB_HP=distributed-paddlesB.hp
+
+# Paths of prof files
+SERVER_PROF=distributed-paddlesS.prof
+CLIENTA_PROF=distributed-paddlesA.prof
+CLIENTB_PROF=distributed-paddlesB.prof
 
 # Files to contain the profiling graphs
 SERVER_PS=distributed-paddlesS.ps
@@ -84,3 +90,11 @@ rm $SERVER_HP
 rm $CLIENTA_HP
 rm $CLIENTB_HP
 
+profiterole $SERVER_PROF
+profiteur $SERVER_PROF
+
+profiterole $CLIENTA_PROF
+profiteur $CLIENTA_PROF
+
+profiterole $CLIENTB_PROF
+profiteur $CLIENTB_PROF

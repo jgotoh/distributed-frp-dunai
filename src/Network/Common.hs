@@ -151,7 +151,9 @@ searchProcessTimeout name addr timeLeft
         Just pid -> do
           P.liftIO $ print $ "WhereIsReply " ++ name' ++ " pid: " ++ show pid
           return $ Just pid
-        Nothing -> searchProcessTimeout name addr (timeLeft - timeoutMS)
+        Nothing -> do
+          P.liftIO $ print "got a reply, but no existing PID"
+          searchProcessTimeout name addr (timeLeft - timeoutMS)
       Nothing -> searchProcessTimeout name addr (timeLeft - timeoutMS)
  where
   timeoutMS = 1000

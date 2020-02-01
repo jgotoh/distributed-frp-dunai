@@ -8,7 +8,6 @@ import Types
 import Data.Maybe
 import qualified Data.Map.Strict as Map
 import Data.Map.Strict ((!))
-import           FRP.BearRiver
 import           FRP.BearRiver.Extra
 import           Data.MonadicStreamFunction.Extra
 import           Control.Monad.Trans.MSF.Reader
@@ -17,6 +16,7 @@ import qualified Control.Distributed.Process   as P
 import           GameState
 import           FRP.BearRiver           hiding ( dot
                                                 , (^+^)
+                                                , edgeJust
                                                 )
 import           SDL.Vect                hiding ( identity
                                                 , trace

@@ -170,7 +170,7 @@ startServerProcess cfg = do
         ++ show mainPid
         ++ " Api ProcessId:"
         ++ show pid
-
+      -- localNodeId <- Node.localNodeId node
       P.register (nameConfig cfg) pid
       P.liftIO . atomically $ putTMVar started (Right pid)
       P.liftIO $ forever $ threadDelay 16

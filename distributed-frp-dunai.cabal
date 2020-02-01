@@ -14,6 +14,7 @@ cabal-version:       >=1.10
 
 library
   exposed-modules:   Data.MonadicStreamFunction.Extra
+                     Data.MonadicStreamFunction.TimeWarp
                      FRP.BearRiver.Extra
                      Network.Client
                      Network.Common
@@ -143,5 +144,6 @@ test-suite distributed-frp-dunai-tests
                        stm >= 2.4.5,
                        tasty,
                        tasty-hunit
-  other-modules:       ServerTest
+  other-modules:       ServerTest,
+                       TimeWarpTest
   

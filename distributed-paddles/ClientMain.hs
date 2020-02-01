@@ -28,7 +28,10 @@ clientMain
 clientMain ip port nick session addr = do
   (window, renderer) <- initializeSDL "distributed-paddles"
   timeRef            <- createTimeRef
-  Right (node, _)    <- initializeNode ip port
+  Right (node, transport)    <- initializeNode ip port
+
+  -- test TCP connection
+  -- searchForServerEndPoint transport session addr
 
   Just server      <- runProcessIO node (searchForServer session addr)
     >>= \s -> return $ join s

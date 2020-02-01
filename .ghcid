@@ -1,1 +1,2 @@
---command="cabal new-repl simple-example"
+--command="cabal new-repl distributed-paddles -b "network-transport" -b "distributed-process" -b "distributed-process-client-server" -b "distributed-process-extras" -b "network-transport-tcp" -b "binary" -b "bytestring"
+--height=14
