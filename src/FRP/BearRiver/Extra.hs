@@ -12,7 +12,7 @@ import           Control.Monad.Trans.MSF.Except
 import           Data.Functor.Identity
 import           Data.Maybe
 import           Data.MonadicStreamFunction.InternalCore
-import           FRP.BearRiver
+import           FRP.BearRiver hiding (edgeJust)
 
 reactimateServer
   :: Monad m

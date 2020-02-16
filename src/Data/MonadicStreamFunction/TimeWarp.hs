@@ -28,7 +28,9 @@ selectSF n sf cs
   | n > 0 = case (drop (fromIntegral n) (sf : cs)) of
     sf' : cs' -> return (sf', cs')
     []        -> error $ "sf at index " ++ show n ++ "does not exist"
+  | otherwise = error "can not happen, because n either equals 0 or is greater than 0"
 
+-- TODO rename to warpMSF
 -- Convert to an MSF that saves its last continuations and is able to revert its state to a previous continuation. Selection is based on arrow input. Maximum number of last continuations is limited to n.
 -- Is only necessary for temporally directed MSFs.
 -- When passing x=0 as input, the sf will use its standard continuation.

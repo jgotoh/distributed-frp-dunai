@@ -16,6 +16,8 @@ library
   exposed-modules:   Data.MonadicStreamFunction.Extra
                      Data.MonadicStreamFunction.TimeWarp
                      FRP.BearRiver.Extra
+                     FRP.BearRiver.TimeWarp
+                     Data.MessageBuffer
                      Network.Client
                      Network.Common
                      Network.Server
@@ -38,6 +40,7 @@ library
                        network >= 3.0,
                        network-transport,
                        network-transport-tcp,
+                       sorted-list,
                        stm >= 2.4.5,
                        time
   hs-source-dirs:      src
@@ -141,9 +144,11 @@ test-suite distributed-frp-dunai-tests
                        network >= 3.0,
                        network-transport,
                        network-transport-tcp,
+                       sorted-list,
                        stm >= 2.4.5,
                        tasty,
                        tasty-hunit
   other-modules:       ServerTest,
-                       TimeWarpTest
+                       TimeWarpTest,
+                       BearRiverTimeWarpTest
   

@@ -30,6 +30,9 @@ module Network.Common
   , searchProcessTimeout
   , Node.LocalNode
   , resolveIO
+  , FrameNr
+  , FrameAge
+  , TSUpdatePacket(..)
   )
 where
 
@@ -42,6 +45,7 @@ import qualified Control.Distributed.Process.Node
 import           Control.Distributed.Process.Serializable
 import qualified Network.Transport.TCP         as NT
 import qualified Network.Socket                as N
+import           Numeric.Natural
 import           Control.Exception.Base         ( IOException )
 import           Data.Binary                    ( Binary )
 import qualified Network.Transport             as T
@@ -115,6 +119,14 @@ instance Binary a => Binary (CommandPacket a)
 data UpdatePacket a = UpdatePacket P.ProcessId a
   deriving (Generic, Show, Typeable, Eq)
 instance Binary a => Binary (UpdatePacket a)
+
+type FrameNr = Natural
+type FrameAge = Natural
+
+-- time-stamped UpdatePackets
+data TSUpdatePacket a = TSUpdatePacket P.ProcessId FrameNr a
+  deriving (Generic, Show, Typeable, Eq)
+instance Binary a => Binary (TSUpdatePacket a)
 
 serverStateSendPort :: ServerStateSendPort a -> P.SendPort (UpdatePacket a)
 serverStateSendPort sp = case sp of
