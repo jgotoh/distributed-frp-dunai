@@ -11,6 +11,8 @@ module Data.MessageBuffer
     , dropWhile
     , fromList
     , take
+    , takeTail
+    , size
     ) where
 
 import Prelude hiding (takeWhile, take, span, dropWhile, tail)
@@ -64,5 +66,10 @@ take n (MessageBuffer xs) = MessageBuffer $ SL.take (fromIntegral n) xs
 -- tail = undefined
 -- Return the suffix remaining after dropping the longest prefix of elements that satisfy the given condition.
 
+size :: Ord a => MessageBuffer a -> Int
+size (MessageBuffer xs) = length $ toList xs
 
-  
+takeTail ::  Natural -> MessageBuffer a -> MessageBuffer a
+takeTail n (MessageBuffer xs) = MessageBuffer $ (SL.reverseDown . SL.take (fromIntegral n) . SL.reverse) xs
+
+

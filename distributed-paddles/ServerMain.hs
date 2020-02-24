@@ -19,6 +19,7 @@ import           Control.Concurrent.STM.TMVar
 import           Control.Concurrent.STM.TQueue
 import qualified Data.Map.Strict               as Map
 import           Control.Monad.Trans.MSF.Reader
+import           FRP.BearRiver.TimeWarp
 import           Network.Common
 import           Network.Server
 import           Data.IORef
@@ -82,8 +83,8 @@ gameSettings = GameSettings psA psB bs
                      orange
                      (SDL.V2 (-0.75) $ -0.12)
 
-serverMain :: HostName -> Port -> SessionName -> IO ()
-serverMain ip p n = do
+serverMain :: HostName -> Port -> SessionName -> Bool -> IO ()
+serverMain ip p n useTimeWarp = do
   Right (node, _)                   <- initializeNode ip p
   s@(LocalServer _ started sQ rQ _) <- startServerProcess
     $ getConfiguration node ip p n
@@ -104,24 +105,50 @@ serverMain ip p n = do
       pidB  = P.sendPortProcessId $ P.sendPortId portB
       pids  = Map.fromList [(LocalPlayer, pidA), (RemotePlayer, pidB)]
 
-  -- reactimate, gather inputs of clients, send UpdatePackets (= snapshots of whole world)
-  reactimateServer
-    (return undefined) -- equivalent to initial GameInput, not needed here
-    (sense timeRef) -- get the DTime
-    (\_ _ -> do
-      return False
-    ) -- actuate: maybe logging or server side rendering
-    (runGameReader gameSettings (serverSF pids))
-    (receiveState rQ) -- get CommandPackets
-    (writeState (createNetStates portA portB api) sQ) -- create UpdatePackets
+  if not useTimeWarp
+    then
+    -- reactimate, gather inputs of clients, send UpdatePackets (= snapshots of whole world)
+         reactimateServer
+      (return undefined) -- equivalent to initial GameInput, not needed here
+      (sense timeRef) -- get the DTime
+      (\_ _ -> do
+        return False
+      ) -- actuate: maybe logging or server side rendering
+      (runGameReader gameSettings (serverSF pids))
+      (receiveState rQ) -- get CommandPackets
+      (writeState (createNetStates portA portB api) sQ) -- create UpdatePackets
+    else reactimateTimeWarp
+      (return (GameInput Nothing))
+      (sense timeRef)
+      (\_ _ -> return False)
+      (runGameReader gameSettings (serverSFWarp pids frames))
+      (receiveState' rQ)
+      (writeState (createNetStatesWithFrame portA portB api) sQ)
+      frames
 
   SDL.quit
+  where frames = 30
 
+
+-- only returns the first element.
 receiveState
   :: Control.Concurrent.STM.TQueue.TQueue (CommandPacket Command)
-  -> IO (Maybe [CommandPacket Command])
-receiveState = (next' >=> (\c -> return $ pure <$> c))
+  -> IO [CommandPacket Command]
+receiveState =
+  (   next'
+  >=> (\c -> return $ case c of
+        Nothing  -> []
+        Just cmd -> [cmd]
+      )
+  )
   where next' = atomically . tryReadTQueue
+
+-- returns all pending commands
+receiveState'
+  :: Control.Concurrent.STM.TQueue.TQueue (CommandPacket Command)
+  -> IO [CommandPacket Command]
+receiveState' = next' -- undefined -- (next' >=> (\c -> return $ pure <$> c))
+  where next' = atomically . flushTQueue
 
 createNetStates
   :: P.SendPort (UpdatePacket NetState)
@@ -129,11 +156,18 @@ createNetStates
   -> P.ProcessId
   -> GameState
   -> [(P.SendPort (UpdatePacket NetState), UpdatePacket NetState)]
-createNetStates !portA !portB server !gs = (fmap . fmap)
-  (UpdatePacket server)
-  [playerA, playerB]
-  -- [playerA, playerB, playerB, playerB, playerB, playerB, playerB, playerB, playerB, playerB, playerB, playerB, playerB, playerB, playerB]
+createNetStates !portA !portB server !gs =
+  createNetStatesWithFrame portA portB server (0, gs)
 
+createNetStatesWithFrame
+  :: P.SendPort (UpdatePacket NetState)
+  -> P.SendPort (UpdatePacket NetState)
+  -> P.ProcessId
+  -> (FrameNr, GameState)
+  -> [(P.SendPort (UpdatePacket NetState), UpdatePacket NetState)]
+createNetStatesWithFrame !portA !portB server !(nr, gs) = (fmap . fmap)
+  (UpdatePacket server nr)
+  [playerA, playerB]
  where
   playerA = (portA, aState)
   playerB = (portB, bState)
@@ -141,11 +175,9 @@ createNetStates !portA !portB server !gs = (fmap . fmap)
   bState  = NetState (remotePlayerState gs) (localPlayerState gs) (ballState gs)
 
 writeState
-  :: (  GameState
-     -> [(P.SendPort (UpdatePacket NetState), UpdatePacket NetState)]
-     )
+  :: (a -> [(P.SendPort (UpdatePacket NetState), UpdatePacket NetState)])
   -> TMVar [(P.SendPort (UpdatePacket NetState), UpdatePacket NetState)]
-  -> GameState
+  -> a
   -> IO ()
 writeState f q gs = do
   let out = f gs
@@ -165,7 +197,7 @@ sense :: IORef DTime -> Bool -> IO (DTime, Maybe a)
 sense timeRef _ = do
   dtSecs <- fixedTimeStep 16.6 timeRef
   -- dtSecs <- senseTime timeRef
-  -- print $ "IO dtSecs: " ++ show dtSecs
+  print $ "IO dtSecs: " ++ show dtSecs
   return (dtSecs, Nothing)
 
 runGameReader :: Monad m => GameSettings -> SF (GameEnv m) a b -> SF m a b

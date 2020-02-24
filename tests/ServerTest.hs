@@ -20,7 +20,7 @@ import qualified Control.Distributed.Process.Extras.SystemLog
                                                as Log
 -- import qualified Control.Distributed.Process.ManagedProcess
                                                -- as MP
-import           Control.Distributed.Process.Extras
+-- import           Control.Distributed.Process.Extras
 -- import qualified Network.Transport.TCP         as NT
 
 import qualified Network.Transport             as T
@@ -90,7 +90,7 @@ testClientUpdates (n, _) = withServer
 
     let ssp1   = ServerStateSendPort sp1
         join1  = JoinRequest nick1 ssp1
-        update = CommandPacket sp1pid Ping
+        update = CommandPacket sp1pid 0 Ping
 
     -- Send CommandPacket without first connecting to the server
     -- the Server should ignore it

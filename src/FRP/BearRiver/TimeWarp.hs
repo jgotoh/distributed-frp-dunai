@@ -7,7 +7,6 @@ module FRP.BearRiver.TimeWarp
   , rollbackInputs
   , processInputs'
   , processedAfterRollback
-  , HasFrameAssociation(..)
   , ProcessedInput(..)
   )
 where
@@ -27,16 +26,12 @@ import           Data.Monoid
 import           Numeric.Natural
 import           FRP.BearRiver
 import           Network.Common
+import           Debug.Trace
 import           Control.Monad.Trans.MSF.Except
                                                as MSF
                                          hiding ( step )
 import           Data.MonadicStreamFunction.InternalCore
                                                 ( MSF(..) )
-
--- Type that are associated with a specific numbered frame
-class HasFrameAssociation a where
-  -- returns its FrameNr
-  getFrame :: a -> Natural
 
 -- Used in TimeWarp synchronisation to save processed sf inputs.
 newtype ProcessedInput a msg = ProcessedInput (FrameNr, (a, [msg]))
@@ -55,7 +50,7 @@ instance HasFrameAssociation (ProcessedInput a msg) where
 -- code generation from proc syntax can lead to loss of performance apparently
 -- see https://stackoverflow.com/questions/45260173/proc-syntax-in-haskell-arrows-leads-to-severe-performance-penalty
 reactimateTimeWarp
-  :: (Monad m, HasFrameAssociation p1, Ord p1)
+  :: (Show a, Show p1, Monad m, HasFrameAssociation p1, Ord p1)
   => m a -- first sense
   -> (Bool -> m (DTime, Maybe a)) -- sense
   -> (Bool -> b -> m Bool) -- actuate
@@ -82,17 +77,17 @@ reactimateTimeWarp senseI sense actuate sf netin netout maxFrames = do
 -- uses feedback to save last n inputs
 -- decides whether to rollback and use previous inputs
 stepSF
-  :: (Monad m, Ord msg, HasFrameAssociation msg)
+  :: (Show a, Show msg, Monad m, Ord msg, HasFrameAssociation msg)
   => MSF m (Natural, (a, [msg])) b
   -> Natural
   -> MSF m (FrameNr, (a, MessageBuffer msg)) b
 stepSF sf maxFrames = feedback mempty $ timeWarpStep sf maxFrames
 
--- mprint :: Monad m => [Char] -> m ()
--- mprint x = return $ trace x ()
+mprint :: Monad m => [Char] -> m ()
+mprint x = return $ trace x ()
 
 timeWarpStep
-  :: (Monad m, Ord msg, HasFrameAssociation msg)
+  :: (Show a, Show msg, Monad m, Ord msg, HasFrameAssociation msg)
   => MSF m (Natural, (a, [msg])) b -- Natural is FrameDt!
   -> Natural
   -> MSF
@@ -106,13 +101,16 @@ timeWarpStep sf maxFrames = MSF $ \((n, (a, qi)), pi) -> do
   ((b, sf'), pi') <- case mT0 of
     Nothing -> do -- qi is empty
       (b, sf') <- unMSF sf (0, (a, []))
-
       pi'      <- return $ addProcessed pi n (a, qi)
       return ((b, sf'), pi')
     Just t0
       | t0 < n -> do
         let pi' = processedAfterRollback pi n a qi  -- all processed inputs after rollback
             qi' = rollbackInputs pi' t0 n -- input when rolling back
+        -- ()<- mprint $ "rollback from " ++ show n ++ " to: " ++ show t0
+        -- () <- mprint $ "size of pi': " ++ (show $ size pi') ++ " qi: " ++ (show $ length qi')
+        -- () <- mprint $ "pi': " ++ (show pi')
+        -- () <- mprint $ "qi': " ++ (show qi')
         msf <- performRollback sf qi'
         return (msf, pi')
       | t0 == n -> do-- processInput sf pi n (0, (a, qi)) -- step
@@ -120,8 +118,8 @@ timeWarpStep sf maxFrames = MSF $ \((n, (a, qi)), pi) -> do
         pi'      <- return $ addProcessed pi n (a, qi)
         return ((b, sf'), pi')
       | t0 > n -> error "t0 > n, inputs from the future can not be processed"
-      | otherwise -> error "i dont even" -- on empty list?!
-  return ((b, take maxFrames pi'), timeWarpStep sf' maxFrames)
+      | otherwise -> error "should not happen"
+  return ((b, takeTail maxFrames pi'), timeWarpStep sf' maxFrames)
 
 -- Adds a single input (a, msg) for a frame to an existing buffer
 addProcessed

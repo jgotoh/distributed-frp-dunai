@@ -10,7 +10,8 @@ data Config = ClientConfig { ipConfig :: String
   , serverAddrConfig :: String }
   | ServerConfig { ipConfig :: String
   , portConfig :: Int
-  , nameConfig :: String}
+  , nameConfig :: String
+  , useTimeWarpConfig :: Bool}
   | GameConfig
   deriving (Show)
 
@@ -35,6 +36,10 @@ serverConfigParser =
     <*> strOption (long "ip" <> help "IP of server" <> metavar "IP")
     <*> option auto (long "p" <> help "Port of server" <> metavar "PORT")
     <*> strOption (long "name" <> help "Name of session" <> metavar "NAME")
+    <*> switch
+          (long "timewarp" <> short 't' <> help
+            "Whether to use time warp synchronisation"
+          )
 
 gameConfigParser :: Parser Config
 gameConfigParser = flag'

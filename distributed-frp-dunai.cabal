@@ -148,7 +148,8 @@ test-suite distributed-frp-dunai-tests
                        stm >= 2.4.5,
                        tasty,
                        tasty-hunit
-  other-modules:       ServerTest,
+  other-modules:       ExtraTest,
+                       ServerTest,
                        TimeWarpTest,
                        BearRiverTimeWarpTest
   

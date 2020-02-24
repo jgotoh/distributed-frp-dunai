@@ -31,8 +31,8 @@ module Network.Common
   , Node.LocalNode
   , resolveIO
   , FrameNr
-  , FrameAge
   , TSUpdatePacket(..)
+  , HasFrameAssociation(..)
   )
 where
 
@@ -62,6 +62,14 @@ type SessionName = String
 type ServerAddress = String
 -- Port number
 type Port = Int
+
+
+type FrameNr = Natural
+
+-- Type that are associated with a specific numbered frame
+class HasFrameAssociation a where
+  -- returns its FrameNr
+  getFrame :: a -> Natural
 
 -- The frequency clients are sending Commandpackets
 type CommandRate = Time.TimeInterval
@@ -112,16 +120,25 @@ instance Serializable a => Binary (JoinAccepted a)
 --   deriving (Generic, Show, Typeable, Eq)
 -- instance Binary a => Binary (StateUpdate a)
 
-data CommandPacket a = CommandPacket P.ProcessId a
-  deriving (Generic, Show, Typeable, Eq)
+data CommandPacket a = CommandPacket P.ProcessId FrameNr a
+  deriving (Generic, Show, Typeable)
+
 instance Binary a => Binary (CommandPacket a)
 
-data UpdatePacket a = UpdatePacket P.ProcessId a
+instance HasFrameAssociation (CommandPacket a) where
+  getFrame (CommandPacket _ n _) = n
+
+instance Ord (CommandPacket a) where
+  (<=) (CommandPacket _ x _) (CommandPacket _ y _) = x <= y
+
+instance Eq (CommandPacket a) where
+  (==) (CommandPacket _ x _) (CommandPacket _ y _) = x == y
+
+data UpdatePacket a = UpdatePacket P.ProcessId FrameNr a
   deriving (Generic, Show, Typeable, Eq)
 instance Binary a => Binary (UpdatePacket a)
-
-type FrameNr = Natural
-type FrameAge = Natural
+instance HasFrameAssociation (UpdatePacket a) where
+  getFrame (UpdatePacket _ n _) = n
 
 -- time-stamped UpdatePackets
 data TSUpdatePacket a = TSUpdatePacket P.ProcessId FrameNr a

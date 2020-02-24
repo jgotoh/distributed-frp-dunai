@@ -106,7 +106,7 @@ fromNetState :: (t1 -> a)
 fromNetState fNS fGS (up, gs) = get <$> up <|> Just (fGS gs)
   where
     get x = case x of
-      UpdatePacket _ ns -> fNS ns
+      UpdatePacket _ _ ns -> fNS ns
 
 -- Signal Functions to simulate a locally controlled paddle
 localPlayerSF :: (Monad m) => SF (PlayerEnv m) (GameInput, a) PlayerState

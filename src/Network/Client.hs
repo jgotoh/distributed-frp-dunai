@@ -15,7 +15,6 @@ import           Control.Concurrent
 import           Control.Concurrent.STM.TQueue
 import           Control.Concurrent.STM.TMVar
 import qualified Control.Distributed.Process   as P
-import           Control.Distributed.Process.Extras
 import qualified Control.Distributed.Process.Extras.Time
                                                as Time
 import qualified Control.Distributed.Process.Node
@@ -115,14 +114,14 @@ createServerStateChannel =
     )
     <$> P.newChan
 
-searchForServerEndPoint :: T.Transport -> String -> String -> IO ()
-searchForServerEndPoint transport name server = do
-  -- Right endpoint <- T.newEndPoint transport
+searchForServerEndPoint :: T.Transport -> String -> IO ()
+searchForServerEndPoint transport server = do
+  Right endpoint <- T.newEndPoint transport
 
-  -- let addr = T.EndPointAddress (pack server)
+  let addr = T.EndPointAddress (pack server)
 
-  -- Right conn <- T.connect endpoint addr T.ReliableOrdered T.defaultConnectHints
-  -- Right () <- T.send conn [pack "hallo"]
+  Right conn <- T.connect endpoint addr T.ReliableOrdered T.defaultConnectHints
+  Right () <- T.send conn [pack "hallo"]
   return ()
 
 searchForServer :: String -> String -> P.Process (Maybe Server)

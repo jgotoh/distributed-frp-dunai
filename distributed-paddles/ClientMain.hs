@@ -28,12 +28,12 @@ clientMain
 clientMain ip port nick session addr = do
   (window, renderer) <- initializeSDL "distributed-paddles"
   timeRef            <- createTimeRef
-  Right (node, transport)    <- initializeNode ip port
+  Right (node, _)    <- initializeNode ip port
 
   -- test TCP connection
   -- searchForServerEndPoint transport session addr
 
-  Just server      <- runProcessIO node (searchForServer session addr)
+  Just  server       <- runProcessIO node (searchForServer session addr)
     >>= \s -> return $ join s
 
   print "Found Server"
@@ -52,7 +52,8 @@ clientMain ip port nick session addr = do
     $ takeTMVar joinResult
 
   -- get initial GameSettings at time = 0
-  Just gs <- runProcessIO node (reqGameSettings server pid) >>= \s -> return $ join s
+  Just gs <- runProcessIO node (reqGameSettings server pid)
+    >>= \s -> return $ join s
 
   setWindowTitle
     window
@@ -91,15 +92,12 @@ writeState
   :: ((DTime, GameInput) -> Maybe Command)
   -> TQueue (CommandPacket Command)
   -> P.ProcessId
-  -> (DTime, Maybe GameInput)
+  -> FrameNr
+  -> (DTime, GameInput)
   -> IO ()
-writeState f q pid (dt, mGi) = do
-  case mGi of
-    Nothing -> return ()
-    Just gi -> do
-      case f (dt, gi) of
-        Nothing -> return ()
-        Just c  -> atomically . writeTQueue q $ CommandPacket pid c
+writeState f q pid frame x = case f x of
+  Nothing -> return ()
+  Just c  -> atomically . writeTQueue q $ CommandPacket pid frame c
 
 runGameReader :: Monad m => GameSettings -> SF (GameEnv m) a b -> SF m a b
 runGameReader gs sf = readerS $ runReaderS_ (runReaderS sf) gs
@@ -164,3 +162,4 @@ drawPlayer r ps = drawRect r
 
 drawBall :: SDL.Renderer -> BallState -> IO ()
 drawBall r bs = drawCircle r (ballPositionState bs) (ballRadiusState bs)
+

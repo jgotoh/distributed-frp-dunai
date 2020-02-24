@@ -151,13 +151,13 @@ startServerProcess cfg = do
 
       pid <- P.spawnLocal $ serverProcess def'' state0
 
-      let server = LocalServer mainPid started sendVar rQueue stateV
+      -- let server = LocalServer mainPid started sendVar rQueue stateV
 
       -- TODO create/ destroy Updaters dynamically when clients join/ quit
       updaters <- (fmap . fmap . fmap) fst spawnUpdateProcesses 2
 
       outPid   <- P.spawnLocal
-        (sendStateProcessSTM updaters sendVar (Time.milliSeconds 32))
+        (sendStateProcessSTM updaters sendVar (Time.milliSeconds 50))
 
       P.link pid
       P.link outPid
@@ -264,7 +264,6 @@ senseTime timeRef = do
   writeIORef timeRef $ newTime
   return $ diffUTCTime newTime previousTime
 
-
 -- Other functions --
 
 -- Blocks until the state satisfies a certain condition
@@ -310,7 +309,7 @@ handleCommandPacket
   :: (Binary a, Typeable a, Binary b, Typeable b)
   => TQueue (CommandPacket a)
   -> MP.CastHandler (ServerState b) (CommandPacket a)
-handleCommandPacket q s m@(CommandPacket pid _) = do
+handleCommandPacket q s m@(CommandPacket pid _ _) = do
   when (pid `elem` (ids <$> s)) (writeQ m)
   MP.continue s
  where

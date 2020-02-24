@@ -3,24 +3,30 @@ module FRP.BearRiver.Extra
   ( reactimateServer
   , reactimateClient
   , edgeJust
+  , countAt
+  , frameNrSF
+  , HasFrameAssociation(..)
+  , FrameNr
   )
 where
 
+import           Control.Monad
+import           Network.Common
 import           Control.Monad.Trans.MSF
 import           Control.Monad.Trans.MSF.Except
                                                as MSF
 import           Data.Functor.Identity
 import           Data.Maybe
 import           Data.MonadicStreamFunction.InternalCore
-import           FRP.BearRiver hiding (edgeJust)
+import           FRP.BearRiver           hiding ( edgeJust )
 
 reactimateServer
   :: Monad m
   => m a
   -> (Bool -> m (DTime, Maybe a)) -- sense
   -> (Bool -> b -> m Bool) -- actuate
-  -> SF Identity (a, Maybe netin) b -- sf
-  -> m (Maybe netin) -- action to get an UpdatePacket
+  -> SF Identity (a, [netin]) b -- sf
+  -> m [netin] -- action to get an UpdatePacket
   -> (b -> m ()) -- action that writes a CommandPacket
   -> m ()
 reactimateServer senseI sense actuate sf netin netout = do
@@ -34,23 +40,51 @@ reactimateServer senseI sense actuate sf netin netout = do
   return ()
 
 reactimateClient
-  :: Monad m
+  :: (HasFrameAssociation netin, Monad m)
   => m a
   -> (Bool -> m (DTime, Maybe a)) -- sense
   -> (Bool -> b -> m Bool) -- actuate
   -> SF Identity (a, Maybe netin) b -- sf
   -> m (Maybe netin) -- action to get an UpdatePacket
-  -> ((DTime, Maybe a) -> m ()) -- action that writes a CommandPacket
+  -> (FrameNr -> (DTime, a) -> m ()) -- action that writes a CommandPacket
   -> m ()
 reactimateClient senseI sense actuate sf netin netout = do
   MSF.reactimateB
-    $   (senseSFClient senseI sense netout &&& (arrM $ \() -> netin))
+    $   (senseSF senseI sense &&& (arrM $ \() -> netin))
     >>> arr reorder
     >>> sfIO sf
+    &&& sendCommand netout
+    >>> arr fst
     >>> (actuateSF actuate)
   return ()
 
+-- Get the current FrameNr. Starts at x0, increments with each iteration.
+-- Current frameNr will be updated when netin contains a value.
+frameNrSF
+  :: (HasFrameAssociation netin, Monad m)
+  => FrameNr
+  -> MSF m (Maybe netin) FrameNr
+frameNrSF x0 =
+  switch' (countAndUpdate x0) (\x1 -> replaceOnce' Nothing >>> frameNrSF x1)
+
+countAndUpdate
+  :: (HasFrameAssociation netin, Monad m)
+  => FrameNr
+  -> MSF m (Maybe netin) (FrameNr, Event FrameNr)
+countAndUpdate x0 = countAt x0 &&& arr ((fmap getFrame) . maybeToEvent)
+
+countAt :: (Monad m, Num n) => n -> MSF m a n
+countAt x0 = count >>> iPre 0 >>> arr ((+) x0)
+
 -- Sense functions
+
+-- -- Determine current FrameNr and send Commands
+sendCommand
+  :: (HasFrameAssociation netin, Monad m)
+  => (FrameNr -> (DTime, a) -> m ())
+  -> MSF m (DTime, (a, Maybe netin)) ()
+sendCommand netout = arr id &&& (arr (snd . snd) >>> frameNrSF 0) >>> arrM
+  (\((dt, (a, _)), frame) -> netout frame (dt, a))
 
 -- sense input and send CommandPackets
 senseSFClient
@@ -85,7 +119,7 @@ senseRestClient sense out a =
     >>> ((arr id *** keepLast a) &&& withSideEffect out)
     >>> arr fst
 
-reorder :: ((DTime, a), Maybe c) -> (DTime, (a, Maybe c))
+reorder :: ((DTime, a), c) -> (DTime, (a, c))
 reorder ((t, a), c) = (t, (a, c))
 
 sfIO :: Monad m => MSF (ReaderT r Identity) a b -> MSF m (r, a) b
@@ -111,6 +145,20 @@ actuateSF actuate = arr (\x -> (True, x)) >>> arrM (uncurry actuate)
 
 switch' :: Monad m => MSF m a (b, Event c) -> (c -> MSF m a b) -> MSF m a b
 switch' sf' sfC = MSF.switch (sf' >>> second (arr eventToMaybe)) sfC
+
+-- Taken from https://hackage.haskell.org/package/bearriver-0.13.1.1/docs/src/FRP.BearRiver.html#dSwitch with type generalized to any MSF
+dSwitch' :: Monad m => MSF m a (b, Event c) -> (c -> MSF m a b) -> MSF m a b
+dSwitch' sf sfC = MSF $ \a -> do
+  (o, ct) <- unMSF sf a
+  case o of
+    (b, Event c) -> do
+      (_, ct') <- (unMSF (sfC c) a)
+      return (b, ct')
+    (b, NoEvent) -> return (b, dSwitch' ct sfC)
+
+-- Taken from https://hackage.haskell.org/package/bearriver-0.13.1.1/docs/src/FRP.BearRiver.html#dSwitch with type generalized to any MSF
+replaceOnce' :: Monad m => a -> MSF m a a
+replaceOnce' a = dSwitch' (arr $ const (a, Event ())) (const $ arr id)
 
 edgeJust :: Monad m => SF m (Maybe a) (Event a)
 edgeJust = edgeBy isJustEdge (Just undefined)

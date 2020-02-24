@@ -2,12 +2,13 @@
 
 module ServerGame where
 
-import Collision
+import           Collision
 import           Display
-import Types
-import Data.Maybe
-import qualified Data.Map.Strict as Map
-import Data.Map.Strict ((!))
+import           Types
+import           Data.Maybe
+import qualified Data.Map.Strict               as Map
+import           Data.Map.Strict                ( (!) )
+import           Data.MonadicStreamFunction.TimeWarp
 import           FRP.BearRiver.Extra
 import           Data.MonadicStreamFunction.Extra
 import           Control.Monad.Trans.MSF.Reader
@@ -29,8 +30,26 @@ data ObjectType = LocalPlayer | RemotePlayer
 serverSF
   :: Monad m
   => Map.Map ObjectType P.ProcessId
-  -> SF (GameEnv m) (GameInput, (Maybe [CommandPacket Command])) GameState
+  -> SF (GameEnv m) (GameInput, [CommandPacket Command]) GameState
 serverSF pids = feedbackM act (loopingGame pids)
+ where
+  act = do
+    gs <- lift ask
+    return (toState gs)
+  toState gs = GameState (ps0 gs) (rps0 gs) (bs0 gs)
+  ps0  = toPlayerState . localPlayerSettings
+  bs0  = toBallState . ballSettings
+  rps0 = toPlayerState . remotePlayerSettings
+
+serverSFWarp
+  :: Monad m
+  => Map.Map ObjectType P.ProcessId
+  -> Natural
+  -> SF
+       (GameEnv m)
+       (Natural, (GameInput, [CommandPacket Command]))
+       GameState
+serverSFWarp pids frames = warpSF frames $ feedbackM act (loopingGame pids)
  where
   act = do
     gs <- lift ask
@@ -45,35 +64,48 @@ loopingGame
   => Map.Map ObjectType P.ProcessId
   -> SF
        (GameEnv m)
-       ((GameInput, (Maybe [CommandPacket Command])), GameState)
+       ((GameInput, ([CommandPacket Command])), GameState)
        (GameState, GameState)
 loopingGame pids =
-  (arr (snd . fst) >>> arr (selectCmd (pids!LocalPlayer)) >>> morphS (selectEnv localPlayerSettings) playerSF)
-  &&& (arr (snd . fst) >>> arr (selectCmd (pids!RemotePlayer)) >>> morphS (selectEnv remotePlayerSettings) playerSF)
-  &&& (arr snd >>> morphS (selectEnv ballSettings) ballSF)
-  >>> arr (\(ps, (rps, bs)) -> ((ps, rps), bs))
-  >>> arr ((uncurry . uncurry) GameState)
-  >>> arr dup
+  (   arr (snd . fst)
+    >>> arr (selectCmd (pids ! LocalPlayer))
+    >>> morphS (selectEnv localPlayerSettings) playerSF
+    )
+    &&& (   arr (snd . fst)
+        >>> arr (selectCmd (pids ! RemotePlayer))
+        >>> morphS (selectEnv remotePlayerSettings) playerSF
+        )
+    &&& (arr snd >>> morphS (selectEnv ballSettings) ballSF)
+    >>> arr (\(ps, (rps, bs)) -> ((ps, rps), bs))
+    >>> arr ((uncurry . uncurry) GameState)
+    >>> arr dup
 
-selectCmd :: P.ProcessId -> Maybe [CommandPacket Command] -> Maybe (CommandPacket Command)
-selectCmd pid xs = (filter has) <$> xs >>=
-  (\xs' -> case xs' of
-      [] -> Nothing
-      (x:_) -> Just x)
-  where
-    has cmd = case cmd of
-      CommandPacket pid' _ -> pid' == pid
+selectCmd
+  :: P.ProcessId -> [CommandPacket Command] -> Maybe (CommandPacket Command)
+selectCmd pid xs = case filter has xs of
+  []      -> Nothing
+  (x : _) -> Just x
+ where
+  has cmd = case cmd of
+    CommandPacket pid' _ _ -> pid' == pid
 
 selectEnv
   :: (GameSettings -> a) -> ClockInfo (ReaderT a m) c -> ClockInfo (GameEnv m) c
 selectEnv f = mapReaderT $ withReaderT f
 
 playerSF
-        :: Monad m => MSF (ReaderT DTime (ReaderT PlayerSettings m)) (Maybe (CommandPacket Command)) PlayerState
+  :: Monad m
+  => MSF
+       (ReaderT DTime (ReaderT PlayerSettings m))
+       (Maybe (CommandPacket Command))
+       PlayerState
 playerSF = arr mapCommand >>> paddleSF
-  where
-    mapCommand = arr (fmap dirCommand . command)
-    command = fmap (\case CommandPacket _ c -> c)
+ where
+  mapCommand = arr (fmap dirCommand . command)
+  command    = fmap
+    (\case
+      CommandPacket _ _ c -> c
+    )
 
 paddleSF :: Monad m => SF (PlayerEnv m) (Maybe Direction) PlayerState
 paddleSF = proc dir -> do
