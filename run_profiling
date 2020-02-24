@@ -61,7 +61,7 @@ echo $SERVER_PATH
 
 # run Server
 echo "Starting the server"
-./$SERVER_PATH +RTS -p -s $PROFILE -RTS --host --ip 127.0.0.1 --p 3000 --name name | sed "s/^/[Server] /" &
+./$SERVER_PATH +RTS -p -s $PROFILE -RTS --host --ip 127.0.0.1 --p 3000 --name name -t | sed "s/^/[Server] /" &
 
 # run Clients
 read -n 1 -s -r -p $'Press any key to start clients\n'
