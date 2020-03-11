@@ -8,7 +8,7 @@ import           SDL.Vect
 import qualified SDL.Primitive                 as SDL
 
 windowWidth :: Int
-windowWidth = 400
+windowWidth = 500
 
 windowHeight :: Int
 windowHeight = 250

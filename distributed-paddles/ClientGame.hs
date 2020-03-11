@@ -3,7 +3,8 @@
 {-# LANGUAGE FlexibleContexts #-}
 
 module ClientGame
-  (remoteClientSF)
+  ( remoteClientSF
+  )
 where
 
 import           FRP.BearRiver.DeadReckoning
@@ -47,8 +48,7 @@ pureRemoteLoopingGame =
     >>> arr (\(ps, (ps', bs)) -> ((ps, ps'), bs))
     >>> arr ((uncurry . uncurry) GameState)
     >>> arr dup
- where
-  su = snd . fst
+  where su = snd . fst
 
 selectEnv
   :: (GameSettings -> a) -> ClockInfo (ReaderT a m) c -> ClockInfo (GameEnv m) c
@@ -56,25 +56,31 @@ selectEnv f = mapReaderT $ withReaderT f
 
 localRemotePlayerSF
   :: Monad m => SF (PlayerEnv m) (Maybe (UpdatePacket NetState)) PlayerState
-localRemotePlayerSF = arr (fmap (localPlayerNetState . updatePacketData)) >>> drmFirst state0 new
-  where
-    new ps pos = ps{playerPositionState=pos}
-    state0 = PlayerState zeroVector zeroVector zeroVector (V4 255 255 255 255)
-    -- TODO implement drmFirstM to get state0 from monadic action
+localRemotePlayerSF =
+  arr (fmap (localPlayerNetState . updatePacketData)) >>>
+  -- drmZero state0
+                                                          drmFirst state0 new
+ where
+  new ps pos = ps { playerPositionState = pos }
+  state0 = PlayerState zeroVector zeroVector zeroVector (V4 255 255 255 255)
 
 remotePlayerSF
-  :: (Monad m)
-  => SF (PlayerEnv m) ((Maybe (UpdatePacket NetState))) PlayerState
-remotePlayerSF = arr (fmap (remotePlayerNetState . updatePacketData)) >>> drmFirst state0 new
-  where
-    new ps pos = ps{playerPositionState=pos}
-    state0 = PlayerState zeroVector zeroVector zeroVector (V4 255 255 255 255)
+  :: (Monad m) => SF (PlayerEnv m) ((Maybe (UpdatePacket NetState))) PlayerState
+remotePlayerSF =
+  arr (fmap (remotePlayerNetState . updatePacketData)) >>>
+  -- drmZero state0
+                                                           drmFirst state0 new
+ where
+  new ps pos = ps { playerPositionState = pos }
+  state0 = PlayerState zeroVector zeroVector zeroVector (V4 255 255 255 255)
 
 remoteBallSF
-  :: Monad m
-  => SF (BallEnv m) ((Maybe (UpdatePacket NetState))) BallState
-remoteBallSF = arr (fmap (ballNetState . updatePacketData)) >>> drmFirst state0 new
-  where
-    new ps pos = ps{ballPositionState=pos}
-    state0 = BallState zeroVector 50 zeroVector (V4 255 255 255 255)
+  :: Monad m => SF (BallEnv m) ((Maybe (UpdatePacket NetState))) BallState
+remoteBallSF =
+  arr (fmap (ballNetState . updatePacketData)) >>>
+  -- drmZero state0
+                                                   drmFirst state0 new
+ where
+  new ps pos = ps { ballPositionState = pos }
+  state0 = BallState zeroVector 50 zeroVector (V4 255 255 255 255)
 

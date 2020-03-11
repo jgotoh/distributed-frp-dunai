@@ -150,15 +150,15 @@ checkScore = proc (gs,bs) -> do
   remoteX <- constM (lift $ asks $ playerX remotePlayerSettings) -< ()
   ballX <- arr ((\p -> case p of V2 x _ -> x) . ballPositionState) -< bs
   ev <- arr check -< (ballX, localX, remoteX)
-  returnA -< newDir' gs <$> ev
+  returnA -< newDir gs <$> ev
   where
     playerX player = (\p -> case p of V2 x _ -> x) . playerPosition0 . player
     check (ballX,localX,remoteX) = if | ballX < localX -> Event RemotePlayer
                                       | ballX > remoteX -> Event LocalPlayer
                                       | otherwise -> NoEvent
 
-newDir' :: GameState -> ObjectType -> (ObjectType, Direction)
-newDir' gs o = (o, dir')
+newDir :: GameState -> ObjectType -> (ObjectType, Direction)
+newDir gs o = (o, dir')
   where
     dir' = normalize $ a - b
     (a,b) = case o of

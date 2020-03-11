@@ -73,9 +73,9 @@ getConfiguration node ip port name = defaultServerConfig node ip port name def
 gameSettings :: GameSettings
 gameSettings = GameSettings psA psB bs
  where
-  psA = PlayerSettings (SDL.V2 50 100) (SDL.V2 10 50) (SDL.V2 0 175) white
-  psB = PlayerSettings (SDL.V2 300 100) (SDL.V2 10 50) (SDL.V2 0 175) white
-  bs  = BallSettings (SDL.V2 200 150)
+  psA = PlayerSettings (SDL.V2 50 100) (SDL.V2 10 50) (SDL.V2 0 225) white
+  psB = PlayerSettings (SDL.V2 450 100) (SDL.V2 10 50) (SDL.V2 0 225) white
+  bs  = BallSettings (SDL.V2 250 175)
                      4
                      (SDL.V2 350 350)
                      (SDL.V4 255 255 0 255)
