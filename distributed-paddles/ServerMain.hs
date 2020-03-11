@@ -4,9 +4,7 @@
 module ServerMain
   ( reqGameSettings
   , serverMain
-  , darkBlue
-  , orange
-  , green
+  , white
   )
 where
 
@@ -75,12 +73,12 @@ getConfiguration node ip port name = defaultServerConfig node ip port name def
 gameSettings :: GameSettings
 gameSettings = GameSettings psA psB bs
  where
-  psA = PlayerSettings (SDL.V2 50 100) (SDL.V2 10 50) (SDL.V2 0 175) orange
-  psB = PlayerSettings (SDL.V2 300 100) (SDL.V2 10 50) (SDL.V2 0 175) green
+  psA = PlayerSettings (SDL.V2 50 100) (SDL.V2 10 50) (SDL.V2 0 175) white
+  psB = PlayerSettings (SDL.V2 300 100) (SDL.V2 10 50) (SDL.V2 0 175) white
   bs  = BallSettings (SDL.V2 200 150)
                      4
                      (SDL.V2 350 350)
-                     orange
+                     (SDL.V4 255 255 0 255)
                      (SDL.V2 (-0.75) $ -0.12)
 
 serverMain :: HostName -> Port -> SessionName -> Bool -> IO ()
@@ -205,12 +203,9 @@ sense timeRef _ = do
 runGameReader :: Monad m => GameSettings -> SF (GameEnv m) a b -> SF m a b
 runGameReader gs sf = readerS $ runReaderS_ (runReaderS sf) gs
 
-orange :: Color
-orange = SDL.V4 240 142 125 255
+white :: Color
+white = SDL.V4 255 255 255 255
 
-green :: Color
-green = SDL.V4 130 161 59 255
-
-darkBlue :: Color
-darkBlue = SDL.V4 51 90 161 255
+-- orange = SDL.V4 240 142 125 255
+-- green = SDL.V4 130 161 59 255
 

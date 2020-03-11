@@ -162,5 +162,5 @@ drawPlayer r ps = drawRect r
                            (playerColorState ps)
 
 drawBall :: SDL.Renderer -> BallState -> IO ()
-drawBall r bs = drawCircle r (ballPositionState bs) (ballRadiusState bs)
+drawBall r bs = drawCircle r (ballPositionState bs) (ballRadiusState bs) (ballColorState bs)
 

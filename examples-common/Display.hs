@@ -49,12 +49,13 @@ createRenderer window = do
 
 drawBackground :: SDL.Renderer -> IO ()
 drawBackground renderer = do
-  SDL.rendererDrawColor renderer SDL.$= SDL.V4 100 149 237 255
+  -- SDL.rendererDrawColor renderer SDL.$= SDL.V4 100 149 237 255
+  SDL.rendererDrawColor renderer SDL.$= SDL.V4 0 0 0 255
   SDL.clear renderer
 
 
-drawCircle :: SDL.Renderer -> Position -> Radius -> IO ()
-drawCircle renderer pos radius = do
+drawCircle :: SDL.Renderer -> Position -> Radius -> Color -> IO ()
+drawCircle renderer pos radius color = do
   SDL.smoothEllipse renderer
                     (cint <$> sdlpos pos)
                     (round radius)
@@ -65,7 +66,6 @@ drawCircle renderer pos radius = do
                   (round radius)
                   (round radius)
                   color
-  where color = SDL.V4 240 142 125 255
 
 sdlpos :: V2 Double -> V2 Int
 sdlpos pos = subtractWindowHeight (round <$> pos)
