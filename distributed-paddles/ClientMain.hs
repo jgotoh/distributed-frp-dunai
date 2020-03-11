@@ -112,7 +112,8 @@ sense timeRef _ = do
   events <- SDL.pollEvents
   when (quitEvent events) exitSuccess
   dir <- direction
-  return (dtSecs, Just $ GameInput dir)
+  -- print dtSecs
+  return (0.0166, Just $ GameInput dir)
   where quitEvent events = elem SDL.QuitEvent $ map SDL.eventPayload events
 
 direction :: IO (Maybe Direction)

@@ -1,9 +1,12 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 module GameState where
 
 import           Collision
 import           Data.Binary
+import           FRP.BearRiver.DeadReckoning
 import           GHC.Generics                   ( Generic )
 import           Type.Reflection
 import           Types
@@ -78,6 +81,12 @@ data PlayerState = PlayerState
   deriving (Generic, Show, Typeable)
 instance Binary PlayerState
 
+instance HasPosition PlayerState Position where
+  getPosition = playerPositionState
+
+instance HasVelocity PlayerState Velocity where
+  getVelocity = playerVelocityState
+
 data BallState = BallState
   { ballPositionState :: !Position
   , ballRadiusState :: !Radius
@@ -86,6 +95,12 @@ data BallState = BallState
   }
   deriving (Generic, Show, Typeable)
 instance Binary BallState
+
+instance HasPosition BallState Position where
+  getPosition = ballPositionState
+
+instance HasVelocity BallState Velocity where
+  getVelocity = ballVelocityState
 
 toBallState :: BallSettings -> BallState
 toBallState (BallSettings p r v c _) = BallState p r v c

@@ -30,6 +30,7 @@ module Network.Common
   , searchProcessTimeout
   , Node.LocalNode
   , resolveIO
+  , updatePacketData
   , FrameNr
   , TSUpdatePacket(..)
   , HasFrameAssociation(..)
@@ -139,6 +140,10 @@ data UpdatePacket a = UpdatePacket P.ProcessId FrameNr a
 instance Binary a => Binary (UpdatePacket a)
 instance HasFrameAssociation (UpdatePacket a) where
   getFrame (UpdatePacket _ n _) = n
+
+updatePacketData :: UpdatePacket a -> a
+updatePacketData up = case up of
+  UpdatePacket _ _ a -> a
 
 -- time-stamped UpdatePackets
 data TSUpdatePacket a = TSUpdatePacket P.ProcessId FrameNr a

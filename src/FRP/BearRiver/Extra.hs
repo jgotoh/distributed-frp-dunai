@@ -7,6 +7,7 @@ module FRP.BearRiver.Extra
   , frameNrSF
   , HasFrameAssociation(..)
   , FrameNr
+  , embedSF
   )
 where
 
@@ -167,4 +168,12 @@ edgeJust = edgeBy isJustEdge (Just undefined)
   isJustEdge Nothing  ma@(Just _) = ma
   isJustEdge (Just _) (   Just _) = Nothing
   isJustEdge (Just _) Nothing     = Nothing
+
+-- Apply an SF to a list of inputs and delta time values.
+embedSF :: Monad m => SF m a b -> [(DTime, a)] -> m [b]
+embedSF _  []              = return []
+embedSF sf ((dt', a) : as) = do
+  (b, sf') <- runReaderT (unMSF sf a) dt'
+  bs       <- embedSF sf' as
+  return (b : bs)
 

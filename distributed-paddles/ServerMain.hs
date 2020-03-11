@@ -197,8 +197,10 @@ sense :: IORef DTime -> Bool -> IO (DTime, Maybe a)
 sense timeRef _ = do
   dtSecs <- fixedTimeStep 16.6 timeRef
   -- dtSecs <- senseTime timeRef
-  print $ "IO dtSecs: " ++ show dtSecs
-  return (dtSecs, Nothing)
+  -- print $ "IO dtSecs: " ++ show dtSecs
+  -- return (dtSecs, Nothing)
+  -- print dtSecs
+  return (0.0166, Nothing)
 
 runGameReader :: Monad m => GameSettings -> SF (GameEnv m) a b -> SF m a b
 runGameReader gs sf = readerS $ runReaderS_ (runReaderS sf) gs

@@ -1,5 +1,6 @@
 -- import           ServerTest
 import           TimeWarpTest
+import           BearRiverDRMTest
 import           BearRiverTimeWarpTest
 import           ExtraTest
 import           Test.Tasty
@@ -14,6 +15,5 @@ main = do
 
 -- TODO add again serverTests when they are fixed.
 tests :: TestTree
-tests = testGroup "All tests" [bearRiverExtraTests]
--- tests = testGroup "All tests" [timeWarpTests, bearRiverTimeWarpTests, bearRiverExtraTests]
+tests = testGroup "All tests" [timeWarpTests, bearRiverTimeWarpTests, bearRiverExtraTests, bearRiverDRMTests]
 
