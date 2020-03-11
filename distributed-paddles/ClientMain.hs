@@ -108,7 +108,7 @@ actuate renderer _ state = do
 
 sense :: IORef DTime -> Bool -> IO (DTime, Maybe GameInput)
 sense timeRef _ = do
-  dtSecs <- fixedTimeStep 16.6 timeRef
+  _ <- fixedTimeStep 16.6 timeRef
   events <- SDL.pollEvents
   when (quitEvent events) exitSuccess
   dir <- direction

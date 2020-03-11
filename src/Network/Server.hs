@@ -22,7 +22,7 @@ module Network.Server
   )
 where
 import           Data.Binary                    ( Binary )
-import           Data.IORef
+-- import           Data.IORef
 import           Type.Reflection
 import           Network.Common
 import           Network.Internal.ServerCommon
@@ -40,7 +40,7 @@ import qualified Control.Distributed.Process.Node
                                                as Node
 -- import           Control.Monad
 import qualified Network.Socket                as N
-import           Data.Time
+-- import           Data.Time
 -- import qualified Network.Transport.TCP         as NT
 
 -- client facing API --
@@ -254,15 +254,15 @@ updateProcess v = forever $ do
 -- Sensing time --
 
 -- TODO move next two functions into separate module
-createTimeRef :: IO (IORef UTCTime)
-createTimeRef = getCurrentTime >>= newIORef
+-- createTimeRef :: IO (IORef UTCTime)
+-- createTimeRef = getCurrentTime >>= newIORef
 
-senseTime :: IORef UTCTime -> IO NominalDiffTime
-senseTime timeRef = do
-  newTime      <- getCurrentTime
-  previousTime <- readIORef timeRef
-  writeIORef timeRef $ newTime
-  return $ diffUTCTime newTime previousTime
+-- senseTime :: IORef UTCTime -> IO NominalDiffTime
+-- senseTime timeRef = do
+--   newTime      <- getCurrentTime
+--   previousTime <- readIORef timeRef
+--   writeIORef timeRef $ newTime
+--   return $ diffUTCTime newTime previousTime
 
 -- Other functions --
 

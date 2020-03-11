@@ -11,7 +11,6 @@ module FRP.BearRiver.Extra
   )
 where
 
-import           Control.Monad
 import           Network.Common
 import           Control.Monad.Trans.MSF
 import           Control.Monad.Trans.MSF.Except
@@ -86,39 +85,6 @@ sendCommand
   -> MSF m (DTime, (a, Maybe netin)) ()
 sendCommand netout = arr id &&& (arr (snd . snd) >>> frameNrSF 0) >>> arrM
   (\((dt, (a, _)), frame) -> netout frame (dt, a))
-
--- sense input and send CommandPackets
-senseSFClient
-  :: Monad m
-  => m a -- initial sense
-  -> (Bool -> m (DTime, Maybe a)) -- sense
-  -> ((DTime, Maybe a) -> m ()) -- netout, send if a is Just value
-  -> MSF m () (DTime, a) -- returns last a if sense's a is Nothing
-senseSFClient senseI sense out =
-  switch' (senseFirstClient senseI out) (senseRestClient sense out)
-
-senseFirstClient
-  :: Monad m
-  => m a
-  -> ((DTime, Maybe a) -> m ())
-  -> MSF m () ((DTime, a), Event a)
-senseFirstClient senseI out =
-  constM senseI
-    >>> arr (\x -> (0, x))
-    >>> (arr $ \x -> (x, Event $ snd x))
-    &&& (second (arr Just) >>> withSideEffect out)
-    >>> arr fst
-
-senseRestClient
-  :: Monad m
-  => (Bool -> m (DTime, Maybe a))
-  -> ((DTime, Maybe a) -> m ())
-  -> a
-  -> MSF m () (DTime, a)
-senseRestClient sense out a =
-  constM (sense True)
-    >>> ((arr id *** keepLast a) &&& withSideEffect out)
-    >>> arr fst
 
 reorder :: ((DTime, a), c) -> (DTime, (a, c))
 reorder ((t, a), c) = (t, (a, c))

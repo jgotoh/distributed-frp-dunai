@@ -26,7 +26,6 @@ import           Data.Monoid
 import           Numeric.Natural
 import           FRP.BearRiver
 import           Network.Common
-import           Debug.Trace
 import           Control.Monad.Trans.MSF.Except
                                                as MSF
                                          hiding ( step )
@@ -83,9 +82,6 @@ stepSF
   -> MSF m (FrameNr, (a, MessageBuffer msg)) b
 stepSF sf maxFrames = feedback mempty $ timeWarpStep sf maxFrames
 
-mprint :: Monad m => [Char] -> m ()
-mprint x = return $ trace x ()
-
 timeWarpStep
   :: (Show a, Show msg, Monad m, Ord msg, HasFrameAssociation msg)
   => MSF m (Natural, (a, [msg])) b -- Natural is FrameDt!
@@ -107,10 +103,6 @@ timeWarpStep sf maxFrames = MSF $ \((n, (a, qi)), pi) -> do
       | t0 < n -> do
         let pi' = processedAfterRollback pi n a qi  -- all processed inputs after rollback
             qi' = rollbackInputs pi' t0 n -- input when rolling back
-        -- ()<- mprint $ "rollback from " ++ show n ++ " to: " ++ show t0
-        -- () <- mprint $ "size of pi': " ++ (show $ size pi') ++ " qi: " ++ (show $ length qi')
-        -- () <- mprint $ "pi': " ++ (show pi')
-        -- () <- mprint $ "qi': " ++ (show qi')
         msf <- performRollback sf qi'
         return (msf, pi')
       | t0 == n -> do-- processInput sf pi n (0, (a, qi)) -- step

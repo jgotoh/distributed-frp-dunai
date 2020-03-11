@@ -195,7 +195,7 @@ replaceTMVar v a = do
 
 sense :: IORef DTime -> Bool -> IO (DTime, Maybe a)
 sense timeRef _ = do
-  dtSecs <- fixedTimeStep 16.6 timeRef
+  _ <- fixedTimeStep 16.6 timeRef
   -- dtSecs <- senseTime timeRef
   -- print $ "IO dtSecs: " ++ show dtSecs
   -- return (dtSecs, Nothing)
