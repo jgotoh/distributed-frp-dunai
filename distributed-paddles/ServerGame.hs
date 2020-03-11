@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiWayIf #-}
 
 module ServerGame where
 
@@ -18,6 +19,7 @@ import           GameState
 import           FRP.BearRiver           hiding ( dot
                                                 , (^+^)
                                                 , edgeJust
+                                                , normalize
                                                 )
 import           SDL.Vect                hiding ( identity
                                                 , trace
@@ -75,7 +77,7 @@ loopingGame pids =
         >>> arr (selectCmd (pids ! RemotePlayer))
         >>> morphS (selectEnv remotePlayerSettings) playerSF
         )
-    &&& (arr snd >>> morphS (selectEnv ballSettings) ballSF)
+    &&& (arr snd >>> ballSF)
     >>> arr (\(ps, (rps, bs)) -> ((ps, rps), bs))
     >>> arr ((uncurry . uncurry) GameState)
     >>> arr dup
@@ -109,32 +111,66 @@ playerSF = arr mapCommand >>> paddleSF
 
 paddleSF :: Monad m => SF (PlayerEnv m) (Maybe Direction) PlayerState
 paddleSF = proc dir -> do
-  c      <- colorSF -< undefined
+  c      <- colorSF -< ()
   (p, v) <- moveSF -< dir
-  b      <- constM (lift $ asks playerBounds0) -< undefined
+  b      <- constM (lift $ asks playerBounds0) -< ()
   returnA -< PlayerState p b v c
 
-ballSF :: (Monad m) => SF (BallEnv m) GameState BallState
+ballSF :: (Monad m) => SF (GameEnv m) GameState BallState
 ballSF =
-  resolveCollisions >>> feedbackM (lift $ asks ballDirection0) movingBallSF
+  switch ( arr id &&& (morphS (selectEnv ballSettings)
+          (resolveCollisions >>> feedbackM (lift $ asks ballDirection0) movingBallSF))
+          >>> arr snd &&& checkScore)
+    (\x -> morphS (mapReaderT (local $ newVelocity x)) ballSF)
+
+newVelocity :: (ObjectType, Direction) -> GameSettings -> GameSettings
+newVelocity x gs = gs{ballSettings=bs{ballDirection0=dir', ballVelocityMax=vel'}}
+  where
+    bs = ballSettings gs
+    dir' = snd x
+    vel' = (ballVelocityMax bs) * 1.01
 
 movingBallSF
   :: Monad m
   => SF (BallEnv m) (Collisions Collision, Direction) (BallState, Direction)
 movingBallSF = proc (cs, dir) -> do
-  c      <- morphS bsToPs colorSF -< undefined
+  c      <- morphS bsToPs colorSF -< ()
   dir'   <- applyCollisionSF -< (dir, cs)
   (p, v) <- morphS bsToPs moveSF -< Just dir'
-  r      <- constM (lift $ asks ballRadius0) -< undefined
+  r      <- constM (lift $ asks ballRadius0) -< ()
   returnA -< (BallState p r v c, dir')
  where
   bsToPs = mapReaderT $ withReaderT ps
   ps (BallSettings p b v c _) = PlayerSettings p (V2 b b) v c
 
+-- checks if a player scored. Event contains the scored player and an updated direction for the ball after reset.
+checkScore :: Monad m => SF (GameEnv m) (GameState, BallState ) (Event (ObjectType, Direction))
+checkScore = proc (gs,bs) -> do
+  localX <- constM (lift $ asks $ playerX localPlayerSettings) -< ()
+  remoteX <- constM (lift $ asks $ playerX remotePlayerSettings) -< ()
+  ballX <- arr ((\p -> case p of V2 x _ -> x) . ballPositionState) -< bs
+  ev <- arr check -< (ballX, localX, remoteX)
+  returnA -< newDir' gs <$> ev
+  where
+    playerX player = (\p -> case p of V2 x _ -> x) . playerPosition0 . player
+    check (ballX,localX,remoteX) = if | ballX < localX -> Event RemotePlayer
+                                      | ballX > remoteX -> Event LocalPlayer
+                                      | otherwise -> NoEvent
+
+newDir' :: GameState -> ObjectType -> (ObjectType, Direction)
+newDir' gs o = (o, dir')
+  where
+    dir' = normalize $ a - b
+    (a,b) = case o of
+      RemotePlayer -> (remotePos, localPos)
+      LocalPlayer -> (localPos, remotePos)
+    localPos = playerPositionState $ localPlayerState gs
+    remotePos = playerPositionState $ remotePlayerState gs
+
 moveSF :: Monad m => SF (PlayerEnv m) (Maybe Direction) (Position, Velocity)
 moveSF = proc dir -> do
-  v    <- constM (lift $ asks playerVelocityMax) -< undefined
-  p0   <- constM (lift $ asks playerPosition0) -< undefined
+  v    <- constM (lift $ asks playerVelocityMax) -< ()
+  p0   <- constM (lift $ asks playerPosition0) -< ()
   dir' <- arr (fromMaybe (V2 0 0)) -< dir
   v'   <- arr (uncurry (*)) -< (v, dir')
   dp   <- integral -< v'
