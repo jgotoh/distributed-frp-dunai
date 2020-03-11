@@ -59,7 +59,7 @@ localRemotePlayerSF
 localRemotePlayerSF = arr (fmap (localPlayerNetState . updatePacketData)) >>> drmFirst state0 new
   where
     new ps pos = ps{playerPositionState=pos}
-    state0 = PlayerState (V2 50 100) (V2 10 50) (V2 0 175) (V4 255 255 255 255)
+    state0 = PlayerState zeroVector zeroVector zeroVector (V4 255 255 255 255)
     -- TODO implement drmFirstM to get state0 from monadic action
 
 remotePlayerSF
@@ -68,7 +68,7 @@ remotePlayerSF
 remotePlayerSF = arr (fmap (remotePlayerNetState . updatePacketData)) >>> drmFirst state0 new
   where
     new ps pos = ps{playerPositionState=pos}
-    state0 = PlayerState (V2 300 100) (V2 10 50) (V2 0 175) (V4 255 255 255 255)
+    state0 = PlayerState zeroVector zeroVector zeroVector (V4 255 255 255 255)
 
 remoteBallSF
   :: Monad m
@@ -76,5 +76,5 @@ remoteBallSF
 remoteBallSF = arr (fmap (ballNetState . updatePacketData)) >>> drmFirst state0 new
   where
     new ps pos = ps{ballPositionState=pos}
-    state0 = BallState (V2 300 100) 50 (V2 0 175) (V4 255 255 255 255)
+    state0 = BallState zeroVector 50 zeroVector (V4 255 255 255 255)
 

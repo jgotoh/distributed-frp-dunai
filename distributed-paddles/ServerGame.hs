@@ -125,8 +125,8 @@ movingBallSF = proc (cs, dir) -> do
   c      <- morphS bsToPs colorSF -< undefined
   dir'   <- applyCollisionSF -< (dir, cs)
   (p, v) <- morphS bsToPs moveSF -< Just dir'
-  b      <- constM (lift $ asks ballRadius0) -< undefined
-  returnA -< (BallState p b v c, dir')
+  r      <- constM (lift $ asks ballRadius0) -< undefined
+  returnA -< (BallState p r v c, dir')
  where
   bsToPs = mapReaderT $ withReaderT ps
   ps (BallSettings p b v c _) = PlayerSettings p (V2 b b) v c

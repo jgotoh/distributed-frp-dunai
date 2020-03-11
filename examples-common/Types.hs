@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Types where
 
@@ -15,8 +16,6 @@ type Collisions a = [Event a]
 type Bounds = V2 Double
 type Radius = Double
 
-
--- TODO orphaninstance
 instance RealFloat a => VectorSpace (V2 a) a where
   zeroVector = zero
 

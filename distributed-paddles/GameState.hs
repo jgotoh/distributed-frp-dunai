@@ -11,7 +11,6 @@ import           GHC.Generics                   ( Generic )
 import           Type.Reflection
 import           Types
 import           Control.Monad.Reader
-import           SDL.Vect
 
 type GameEnv = ReaderT GameSettings
 
@@ -114,12 +113,8 @@ toShapeBall (BallState p r _ _) =
 
 toShapePlayer :: PlayerState -> ToShape PlayerState
 toShapePlayer (PlayerState p b _ _) = ToShape
-  { broadphaseShape  = Sphere center radius
+  { broadphaseShape  = AABB p b
   , narrowphaseShape = AABB p b
   }
- where
-  radius = case b of
-    V2 x y -> max x y
-  center = p + 0.5 * b
 
 
