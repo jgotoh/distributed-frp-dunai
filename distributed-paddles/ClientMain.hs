@@ -77,12 +77,8 @@ clientWindowTitle localP remoteP = if x localP < x remoteP
     SDL.V2 x' _ -> x'
 
 receiveState
-  :: TQueue (UpdatePacket NetState) -> IO (Maybe (UpdatePacket NetState))
-receiveState q = do
-  in' <- readQ q
-  -- print in'
-  return in'
-  where readQ = atomically . tryReadTQueue
+  :: TMVar (UpdatePacket NetState) -> IO (Maybe (UpdatePacket NetState))
+receiveState = atomically . tryTakeTMVar
 
 getDir :: (DTime, GameInput) -> Maybe Command
 getDir = mkCommand . directionInput . snd where mkCommand = (Command <$>)

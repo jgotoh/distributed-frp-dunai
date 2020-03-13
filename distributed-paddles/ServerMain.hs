@@ -145,7 +145,7 @@ receiveState =
 receiveState'
   :: Control.Concurrent.STM.TQueue.TQueue (CommandPacket Command)
   -> IO [CommandPacket Command]
-receiveState' = next' -- undefined -- (next' >=> (\c -> return $ pure <$> c))
+receiveState' = next'
   where next' = atomically . flushTQueue
 
 createNetStates

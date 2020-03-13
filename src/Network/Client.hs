@@ -3,7 +3,6 @@
 module Network.Client
   ( startClientProcess
   , searchForServer
-  , searchForServerEndPoint
   , createServerStateChannel
   , LocalClient(..)
   )
@@ -12,14 +11,10 @@ where
 import           Network.Common
 import           Network.Server
 import           Control.Concurrent
-import           Control.Concurrent.STM.TQueue
 import           Control.Concurrent.STM.TMVar
 import qualified Control.Distributed.Process   as P
-import qualified Control.Distributed.Process.Extras.Time
-                                               as Time
 import qualified Control.Distributed.Process.Node
                                                as Node
--- import           Control.Exception.Base         ( IOException )
 import           Control.Monad
 import           Control.Monad.Catch
 import           Control.Monad.STM
@@ -27,7 +22,7 @@ import           Data.ByteString.Char8
 import qualified Network.Transport             as T
 
 data LocalClient a b = LocalClient { clientPid :: P.ProcessId
-                     , readQueue :: TQueue (UpdatePacket a)
+                     , readVar :: TMVar (UpdatePacket a)
                      , sendVar :: TMVar (CommandPacket b)
                      }
 
@@ -55,53 +50,50 @@ startClientProcess
   -> P.Process (ServerStateChannel a)
   -> IO (LocalClient a b, TMVar (JoinRequestResult [Nickname]))
 startClientProcess node server nick sChanP = do
-  rQueue <- newTQueueIO :: IO (TQueue (UpdatePacket a))
+  rVar <- newEmptyTMVarIO :: IO (TMVar (UpdatePacket a))
   sVar <- newEmptyTMVarIO :: IO (TMVar (CommandPacket b))
-  rVar   <- newEmptyTMVarIO
+  joinResultVar   <- newEmptyTMVarIO
   pid    <- Node.forkProcess node $ catch
     (do
 
       ServerStateChannel sp rp <- sChanP
       joinResult               <- sendJoinRequest server nick sp
 
-      P.liftIO . atomically $ putTMVar rVar joinResult
+      P.liftIO . atomically $ putTMVar joinResultVar joinResult
 
       case joinResult of
         JoinRequestResult r -> case r of
           Left  err -> P.liftIO $ print err
           Right acc -> do
             P.liftIO $ print $ "join successful: " ++ show acc
-            clientProcess node server rp rQueue sVar
+            clientProcess node server rp rVar sVar
     )
     (\e -> P.liftIO $ print $ show (e :: SomeException))
-  return (LocalClient pid rQueue sVar, rVar) -- return $ (LocalClient _, CurrentState)
+  return (LocalClient pid rVar sVar, joinResultVar)
 
--- TODO create something along the lines of P.ProcessDefinition for clients
--- TODO cmdrate as argument
 clientProcess
   :: (Binary a, Typeable a, Binary b, Typeable b)
   => Node.LocalNode
   -> Server
   -> ServerStateReceivePort a
-  -> TQueue (UpdatePacket a)
+  -> TMVar (UpdatePacket a)
   -> TMVar (CommandPacket b)
   -> P.Process ()
-clientProcess node server rp rQueue sVar = do
+clientProcess node server rp rVar sVar = do
   P.liftIO $ print $ "LocalClient starts at: " ++ show
     (P.nodeAddress $ Node.localNodeId node)
 
   case server of
     Server pid -> P.link pid
 
-  inPid  <- P.liftIO $ Node.forkProcess node (receiveStateProcess rQueue rp)
+  inPid  <- P.liftIO $ Node.forkProcess node (receiveStateProcess rVar rp)
   outPid <- P.liftIO $ Node.forkProcess
     node
-    (sendStateProcess sVar server (Time.milliSeconds 10))
+    (sendStateProcess sVar server)
 
   P.link inPid
   P.link outPid
 
-  P.liftIO $ print "clientProcess now waits"
   _ <- P.liftIO $ forever $ threadDelay 100000
   P.liftIO $ print "clientProcess ends"
 
@@ -113,16 +105,6 @@ createServerStateChannel =
       ServerStateChannel (ServerStateSendPort s) (ServerStateReceivePort r)
     )
     <$> P.newChan
-
-searchForServerEndPoint :: T.Transport -> String -> IO ()
-searchForServerEndPoint transport server = do
-  Right endpoint <- T.newEndPoint transport
-
-  let addr = T.EndPointAddress (pack server)
-
-  Right conn <- T.connect endpoint addr T.ReliableOrdered T.defaultConnectHints
-  Right () <- T.send conn [pack "hallo"]
-  return ()
 
 searchForServer :: String -> String -> P.Process (Maybe Server)
 searchForServer name server = do
@@ -141,32 +123,34 @@ searchForServer name server = do
 -- Process to receive UpdatePackets sent from the server
 receiveStateProcess
   :: (Binary a, Typeable a)
-  => TQueue (UpdatePacket a)
+  => TMVar (UpdatePacket a)
   -> ServerStateReceivePort a
   -> P.Process ()
 receiveStateProcess q p =
   forever $ P.receiveChan (serverStateReceivePort p) >>= writeQ
-  where writeQ = P.liftIO . atomically . writeTQueue q
+  where
+    writeQ = P.liftIO . atomically . replaceTMVar q
+
+-- Empties a TMVar, then writes a new value
+replaceTMVar :: TMVar a -> a -> STM ()
+replaceTMVar v a = do
+  empty' <- isEmptyTMVar v
+  if empty'
+    then putTMVar v a
+    else do
+      _ <- swapTMVar v a
+      return ()
 
 -- Process to send CommandPackets to the server
 sendStateProcess
-  -- :: (Monoid a, Binary a, Typeable a)
   :: (Binary a, Typeable a)
   => TMVar (CommandPacket a)
   -> Server
-  -> CommandRate
   -> P.Process ()
-sendStateProcess q s r = forever $ delay >> readQ q >>= sendState
+sendStateProcess q s = forever $ readQ q >>= sendState
  where
   readQ q' = P.liftIO . atomically $ takeTMVar q'
-  -- TODO sendState currently only sends the newest state
-  -- sendState xs = if Prelude.null xs then return () else clientUpdate s (mconcat xs)
   sendState = clientUpdate s
-  -- sendState (x : xs) = do
-  --   clientUpdate s x
-  --   P.liftIO $ print $ Prelude.length xs
-  -- sendState []      = return ()
-  delay = P.liftIO $ threadDelay (Time.asTimeout r)
 
 -- send a JoinRequest that contains the client's nickname and the SendPort to receive simulation state updates
 sendJoinRequest
