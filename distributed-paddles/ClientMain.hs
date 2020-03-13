@@ -90,14 +90,14 @@ getDir = mkCommand . directionInput . snd where mkCommand = (Command <$>)
 -- TODO as library function, so user only has to write f
 writeState
   :: ((DTime, GameInput) -> Maybe Command)
-  -> TQueue (CommandPacket Command)
+  -> TMVar (CommandPacket Command)
   -> P.ProcessId
   -> FrameNr
   -> (DTime, GameInput)
   -> IO ()
 writeState f q pid frame x = case f x of
   Nothing -> return ()
-  Just c  -> atomically . writeTQueue q $ CommandPacket pid frame c
+  Just c  -> atomically . putTMVar q $ CommandPacket pid frame c
 
 runGameReader :: Monad m => GameSettings -> SF (GameEnv m) a b -> SF m a b
 runGameReader gs sf = readerS $ runReaderS_ (runReaderS sf) gs

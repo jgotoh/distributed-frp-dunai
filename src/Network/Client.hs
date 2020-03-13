@@ -28,7 +28,7 @@ import qualified Network.Transport             as T
 
 data LocalClient a b = LocalClient { clientPid :: P.ProcessId
                      , readQueue :: TQueue (UpdatePacket a)
-                     , sendQueue :: TQueue (CommandPacket b)
+                     , sendVar :: TMVar (CommandPacket b)
                      }
 
 newtype Server = Server P.ProcessId
@@ -56,7 +56,7 @@ startClientProcess
   -> IO (LocalClient a b, TMVar (JoinRequestResult [Nickname]))
 startClientProcess node server nick sChanP = do
   rQueue <- newTQueueIO :: IO (TQueue (UpdatePacket a))
-  sQueue <- newTQueueIO :: IO (TQueue (CommandPacket b))
+  sVar <- newEmptyTMVarIO :: IO (TMVar (CommandPacket b))
   rVar   <- newEmptyTMVarIO
   pid    <- Node.forkProcess node $ catch
     (do
@@ -71,10 +71,10 @@ startClientProcess node server nick sChanP = do
           Left  err -> P.liftIO $ print err
           Right acc -> do
             P.liftIO $ print $ "join successful: " ++ show acc
-            clientProcess node server rp rQueue sQueue
+            clientProcess node server rp rQueue sVar
     )
     (\e -> P.liftIO $ print $ show (e :: SomeException))
-  return (LocalClient pid rQueue sQueue, rVar) -- return $ (LocalClient _, CurrentState)
+  return (LocalClient pid rQueue sVar, rVar) -- return $ (LocalClient _, CurrentState)
 
 -- TODO create something along the lines of P.ProcessDefinition for clients
 -- TODO cmdrate as argument
@@ -84,9 +84,9 @@ clientProcess
   -> Server
   -> ServerStateReceivePort a
   -> TQueue (UpdatePacket a)
-  -> TQueue (CommandPacket b)
+  -> TMVar (CommandPacket b)
   -> P.Process ()
-clientProcess node server rp rQueue sQueue = do
+clientProcess node server rp rQueue sVar = do
   P.liftIO $ print $ "LocalClient starts at: " ++ show
     (P.nodeAddress $ Node.localNodeId node)
 
@@ -96,7 +96,7 @@ clientProcess node server rp rQueue sQueue = do
   inPid  <- P.liftIO $ Node.forkProcess node (receiveStateProcess rQueue rp)
   outPid <- P.liftIO $ Node.forkProcess
     node
-    (sendStateProcess sQueue server (Time.milliSeconds 20))
+    (sendStateProcess sVar server (Time.milliSeconds 10))
 
   P.link inPid
   P.link outPid
@@ -150,17 +150,22 @@ receiveStateProcess q p =
 
 -- Process to send CommandPackets to the server
 sendStateProcess
+  -- :: (Monoid a, Binary a, Typeable a)
   :: (Binary a, Typeable a)
-  => TQueue (CommandPacket a)
+  => TMVar (CommandPacket a)
   -> Server
   -> CommandRate
   -> P.Process ()
 sendStateProcess q s r = forever $ delay >> readQ q >>= sendState
  where
-  readQ q' = P.liftIO . atomically $ flushTQueue q'
+  readQ q' = P.liftIO . atomically $ takeTMVar q'
   -- TODO sendState currently only sends the newest state
-  sendState (x : _) = clientUpdate s x
-  sendState []      = return ()
+  -- sendState xs = if Prelude.null xs then return () else clientUpdate s (mconcat xs)
+  sendState = clientUpdate s
+  -- sendState (x : xs) = do
+  --   clientUpdate s x
+  --   P.liftIO $ print $ Prelude.length xs
+  -- sendState []      = return ()
   delay = P.liftIO $ threadDelay (Time.asTimeout r)
 
 -- send a JoinRequest that contains the client's nickname and the SendPort to receive simulation state updates
