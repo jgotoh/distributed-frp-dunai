@@ -6,6 +6,7 @@ module GameState where
 
 import           Collision
 import           Data.Binary
+import           FRP.BearRiver
 import           FRP.BearRiver.DeadReckoning
 import           GHC.Generics                   ( Generic )
 import           Type.Reflection
@@ -28,6 +29,7 @@ data GameSettings = GameSettings
   { localPlayerSettings :: PlayerSettings
   , remotePlayerSettings :: PlayerSettings
   , ballSettings :: BallSettings
+  , maximumGameLength :: Time
   }
   deriving (Generic, Show, Typeable)
 instance Binary GameSettings
@@ -67,6 +69,7 @@ data GameState = GameState
   { localPlayerState :: PlayerState
   , remotePlayerState :: PlayerState
   , ballState :: BallState
+  , gameOver :: Bool
   }
   deriving (Generic, Show, Typeable)
 instance Binary GameState

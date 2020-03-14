@@ -46,7 +46,7 @@ instance Binary GSRequest
 
 -- handler to be added to a server's ProcessDefinition
 handleGSRequest :: MP.CallHandler (ServerState a) GSRequest (Maybe GameSettings)
-handleGSRequest s (GSRequest pid) = MP.reply (gsClient s gameSettings pid) s
+handleGSRequest s (GSRequest pid) = MP.reply (gsClient s (gameSettings 0) pid) s
 
 -- return the GameState for a specific client
 gsClient :: ServerState a -> GameSettings -> P.ProcessId -> Maybe GameSettings
@@ -70,8 +70,8 @@ getConfiguration node ip port name = defaultServerConfig node ip port name def
   def =
     addApiHandler (MP.handleCall handleGSRequest) defaultFRPProcessDefinition
 
-gameSettings :: GameSettings
-gameSettings = GameSettings psA psB bs
+gameSettings :: Int -> GameSettings
+gameSettings roundLength = GameSettings psA psB bs (fromIntegral roundLength )
  where
   psA = PlayerSettings (SDL.V2 50 100) (SDL.V2 10 50) (SDL.V2 0 225) white
   psB = PlayerSettings (SDL.V2 450 100) (SDL.V2 10 50) (SDL.V2 0 225) white
@@ -81,8 +81,8 @@ gameSettings = GameSettings psA psB bs
                      (SDL.V4 255 255 0 255)
                      (SDL.V2 (-0.75) $ -0.12)
 
-serverMain :: HostName -> Port -> SessionName -> Bool -> IO ()
-serverMain ip p n useTimeWarp = do
+serverMain :: HostName -> Port -> SessionName -> Int -> Bool -> IO ()
+serverMain ip p n roundLength useTimeWarp = do
   Right (node, _)                   <- initializeNode ip p
   s@(LocalServer _ started sQ rQ _) <- startServerProcess
     $ getConfiguration node ip p n
@@ -109,17 +109,15 @@ serverMain ip p n useTimeWarp = do
          reactimateServer
       (return undefined) -- equivalent to initial GameInput, not needed here
       (sense timeRef) -- get the DTime
-      (\_ _ -> do
-        return False
-      ) -- actuate: maybe logging or server side rendering
-      (runGameReader gameSettings (serverSF pids))
+      actuate
+      (runGameReader (gameSettings roundLength) (serverSF pids))
       (receiveState rQ) -- get CommandPackets
       (writeState (createNetStates portA portB api) sQ) -- create UpdatePackets
     else reactimateTimeWarp
       (return (GameInput Nothing))
       (sense timeRef)
-      (\_ _ -> return False)
-      (runGameReader gameSettings (serverSFWarp pids frames))
+      actuate
+      (runGameReader (gameSettings roundLength) (serverSFWarp pids frames))
       (receiveState' rQ)
       (writeState (createNetStatesWithFrame portA portB api) sQ)
       frames
@@ -127,6 +125,8 @@ serverMain ip p n useTimeWarp = do
   SDL.quit
   where frames = 30
 
+actuate :: Bool -> GameState -> IO Bool
+actuate _ gs = return $ gameOver gs
 
 -- only returns the first element.
 receiveState

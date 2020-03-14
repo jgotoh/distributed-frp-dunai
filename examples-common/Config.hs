@@ -11,6 +11,7 @@ data Config = ClientConfig { ipConfig :: String
   | ServerConfig { ipConfig :: String
   , portConfig :: Int
   , nameConfig :: String
+  , lengthConfig :: Int
   , useTimeWarpConfig :: Bool}
   | GameConfig
   deriving (Show)
@@ -36,6 +37,7 @@ serverConfigParser =
     <*> strOption (long "ip" <> help "IP of server" <> metavar "IP")
     <*> option auto (long "p" <> help "Port of server" <> metavar "PORT")
     <*> strOption (long "name" <> help "Name of session" <> metavar "NAME")
+    <*> option auto (long "d" <> help "Length of round in seconds" <> metavar "LENGTH")
     <*> switch
           (long "timewarp" <> short 't' <> help
             "Whether to use time warp synchronisation"

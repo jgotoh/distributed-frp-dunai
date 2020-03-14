@@ -39,15 +39,20 @@ serverSF
   :: Monad m
   => Map.Map ObjectType P.ProcessId
   -> SF (GameEnv m) (GameInput, [CommandPacket Command]) GameState
-serverSF pids = feedbackM act (loopingGame pids)
+serverSF pids = feedbackM act (loopingGame pids) >>> checkTime
  where
   act = do
     gs <- lift ask
     return (toState gs)
-  toState gs = GameState (ps0 gs) (rps0 gs) (bs0 gs)
+  toState gs = GameState (ps0 gs) (rps0 gs) (bs0 gs) False
   ps0  = toPlayerState . localPlayerSettings
   bs0  = toBallState . ballSettings
   rps0 = toPlayerState . remotePlayerSettings
+
+checkTime :: Monad m => SF (GameEnv m) GameState GameState
+checkTime = arr id &&& check >>> arr (\(gs, q) -> gs{gameOver = q})
+  where
+    check = constM (lift $ asks maximumGameLength) &&& time >>> arr (uncurry (<=))
 
 serverSFWarp
   :: Monad m
@@ -57,12 +62,12 @@ serverSFWarp
        (GameEnv m)
        (Natural, (GameInput, [CommandPacket Command]))
        GameState
-serverSFWarp pids frames = warpSF frames $ feedbackM act (loopingGame pids)
+serverSFWarp pids frames = warpSF frames $ feedbackM act (loopingGame pids) >>> checkTime
  where
   act = do
     gs <- lift ask
     return (toState gs)
-  toState gs = GameState (ps0 gs) (rps0 gs) (bs0 gs)
+  toState gs = GameState (ps0 gs) (rps0 gs) (bs0 gs) False
   ps0  = toPlayerState . localPlayerSettings
   bs0  = toBallState . ballSettings
   rps0 = toPlayerState . remotePlayerSettings
@@ -86,6 +91,7 @@ loopingGame pids =
     &&& (arr snd >>> ballSF)
     >>> arr (\(ps, (rps, bs)) -> ((ps, rps), bs))
     >>> arr ((uncurry . uncurry) GameState)
+    >>> arr (\gs -> gs False)
     >>> arr dup
 
 selectCmd

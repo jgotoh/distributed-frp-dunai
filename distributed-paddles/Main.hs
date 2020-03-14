@@ -18,5 +18,5 @@ main = do
   case cfg of
     ClientConfig ip port nick name server ->
       clientMain ip port nick name server
-    ServerConfig ip port name useTW -> serverMain ip port name useTW
+    ServerConfig ip port name roundLength useTW -> serverMain ip port name roundLength useTW
     GameConfig                -> undefined

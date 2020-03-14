@@ -31,7 +31,7 @@ remoteClientSF = feedbackM act pureRemoteLoopingGame
   act = do
     gs <- lift ask
     return (toState gs)
-  toState gs = GameState (ps0 gs) (rps0 gs) (bs0 gs)
+  toState gs = GameState (ps0 gs) (rps0 gs) (bs0 gs) False
   ps0  = toPlayerState . localPlayerSettings
   bs0  = toBallState . ballSettings
   rps0 = toPlayerState . remotePlayerSettings
@@ -50,6 +50,7 @@ pureRemoteLoopingGame =
     &&& (arr su >>> morphS (selectEnv ballSettings) remoteBallSF)
     >>> arr (\(ps, (ps', bs)) -> ((ps, ps'), bs))
     >>> arr ((uncurry . uncurry) GameState)
+    >>> arr (\gs -> gs False)
     >>> arr dup
   where su = snd . fst
 
