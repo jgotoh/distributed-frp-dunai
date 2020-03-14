@@ -1,7 +1,13 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
 
-module ServerGame where
+module ServerGame
+  ( ObjectType(..)
+  , serverSF
+  , serverSFWarp
+  , paddleSF
+  )
+where
 
 import           Collision
 import           Display

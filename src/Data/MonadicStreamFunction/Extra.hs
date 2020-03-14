@@ -37,3 +37,4 @@ replaceOnce' a = dSwitch' (arr $ const (a, Just ())) (const $ arr id)
 -- Returns x on first application, after that sf is used.
 replaceOnceOut :: Monad m => b -> MSF m a b -> MSF m a b
 replaceOnceOut x sf = dSwitch' (arr (\_ -> x) &&& arr (\_ -> Just ())) (\_ -> sf)
+
