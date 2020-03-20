@@ -48,11 +48,17 @@ pureRemoteLoopingGame =
   (arr fst >>> morphS (selectEnv localPlayerSettings) localRemotePlayerSF)
     &&& (arr su >>> morphS (selectEnv remotePlayerSettings) remotePlayerSF)
     &&& (arr su >>> morphS (selectEnv ballSettings) remoteBallSF)
-    >>> arr (\(ps, (ps', bs)) -> ((ps, ps'), bs))
-    >>> arr ((uncurry . uncurry) GameState)
-    >>> arr (\gs -> gs False)
+    &&& (arr shouldQuit)
+    >>> arr (\(ps, (ps', (bs, q))) -> (((ps, ps'), bs), q))
+    >>> arr ((uncurry . uncurry . uncurry) GameState)
     >>> arr dup
   where su = snd . fst
+
+-- returns true, if NetState.gameOverNetState returns true
+shouldQuit :: ((GameInput, Maybe (UpdatePacket NetState)), GameState) -> Bool
+shouldQuit tuple = maybe False id (isQuit <$> (snd $ fst tuple))
+  where
+    isQuit = gameOverNetState . updatePacketData
 
 selectEnv
   :: (GameSettings -> a) -> ClockInfo (ReaderT a m) c -> ClockInfo (GameEnv m) c

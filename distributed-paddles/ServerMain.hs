@@ -8,7 +8,7 @@ module ServerMain
   )
 where
 
--- import           Control.Concurrent
+import           Control.Concurrent
 import           Data.List
 import           Control.Monad.STM
 import           Control.Monad
@@ -91,7 +91,6 @@ serverMain ip p n roundLength useTimeWarp = do
 
   -- SDL is used only to sense time
   SDL.initialize [SDL.InitTimer]
-  timeRef <- createTimeRef
 
   print "waiting for clients to join"
   [clientA, clientB] <- waitUntilState s (\s' -> (length s') == 2)
@@ -103,30 +102,50 @@ serverMain ip p n roundLength useTimeWarp = do
       pidB  = P.sendPortProcessId $ P.sendPortId portB
       pids  = Map.fromList [(LocalPlayer, pidA), (RemotePlayer, pidB)]
 
+  -- FPS:
+  frameNrRef <- newIORef 0
+  startTime <- createTimeRef
+
+  timeRef <- createTimeRef
   if not useTimeWarp
     then
     -- reactimate, gather inputs of clients, send UpdatePackets (= snapshots of whole world)
          reactimateServer
       (return undefined) -- equivalent to initial GameInput, not needed here
       (sense timeRef) -- get the DTime
-      actuate
+      (actuate frameNrRef)
       (runGameReader (gameSettings roundLength) (serverSF pids))
       (receiveState rQ) -- get CommandPackets
       (writeState (createNetStates portA portB api) sQ) -- create UpdatePackets
     else reactimateTimeWarp
       (return (GameInput Nothing))
       (sense timeRef)
-      actuate
+      (actuate frameNrRef)
       (runGameReader (gameSettings roundLength) (serverSFWarp pids frames))
       (receiveState' rQ)
       (writeState (createNetStatesWithFrame portA portB api) sQ)
       frames
 
+  dtTime <- senseTime startTime
+  numberOfFrames <- readIORef frameNrRef
+
+  let dtMs = dtTime
+      fps = (fromIntegral numberOfFrames) / dtMs
+
+  print $ "FPS: " ++ show fps
+
+  print "round over, server will quit"
+  threadDelay 1000000
   SDL.quit
   where frames = 30
 
-actuate :: Bool -> GameState -> IO Bool
-actuate _ gs = return $ gameOver gs
+actuate :: IORef Integer -> Bool -> GameState -> IO Bool
+actuate frameNrRef _ gs = do
+
+  previousFrame <- readIORef frameNrRef
+  writeIORef frameNrRef $ previousFrame + 1
+
+  return $ gameOver gs
 
 -- only returns the first element.
 receiveState
@@ -169,8 +188,8 @@ createNetStatesWithFrame !portA !portB server !(nr, gs) = (fmap . fmap)
  where
   playerA = (portA, aState)
   playerB = (portB, bState)
-  aState  = NetState (localPlayerState gs) (remotePlayerState gs) (ballState gs)
-  bState  = NetState (remotePlayerState gs) (localPlayerState gs) (ballState gs)
+  aState  = NetState (localPlayerState gs) (remotePlayerState gs) (ballState gs) (gameOver gs)
+  bState  = NetState (remotePlayerState gs) (localPlayerState gs) (ballState gs) (gameOver gs)
 
 writeState
   :: (a -> [(P.SendPort (UpdatePacket NetState), UpdatePacket NetState)])
@@ -193,12 +212,12 @@ replaceTMVar v a = do
 
 sense :: IORef DTime -> Bool -> IO (DTime, Maybe a)
 sense timeRef _ = do
-  _ <- fixedTimeStep 16.6 timeRef
+  _ <- fixedTimeStep 16.667 timeRef
   -- dtSecs <- senseTime timeRef
   -- print $ "IO dtSecs: " ++ show dtSecs
   -- return (dtSecs, Nothing)
   -- print dtSecs
-  return (0.0166, Nothing)
+  return (0.016667, Nothing)
 
 runGameReader :: Monad m => GameSettings -> SF (GameEnv m) a b -> SF m a b
 runGameReader gs sf = readerS $ runReaderS_ (runReaderS sf) gs

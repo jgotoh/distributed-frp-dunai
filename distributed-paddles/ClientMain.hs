@@ -26,7 +26,6 @@ clientMain
   :: HostName -> Port -> Nickname -> SessionName -> ServerAddress -> IO ()
 clientMain ip port nick session addr = do
   (window, renderer) <- initializeSDL "distributed-paddles"
-  timeRef            <- createTimeRef
   Right (node, _)    <- initializeNode ip port
 
   -- test TCP connection
@@ -58,12 +57,25 @@ clientMain ip port nick session addr = do
     window
     (clientWindowTitle (localPlayerSettings gs) (remotePlayerSettings gs))
 
+  -- FPS:
+  frameNrRef <- newIORef 0
+  startTime <- createTimeRef
+
+  timeRef   <- createTimeRef
   reactimateClient (return $ GameInput Nothing)
                    (sense timeRef)
-                   (actuate renderer)
+                   (actuate frameNrRef renderer)
                    (runGameReader gs remoteClientSF)
                    (receiveState rQ)
                    (writeState getDir sQ pid)
+
+  dtTime <- senseTime startTime
+  frames <- readIORef frameNrRef
+
+  let dtMs = dtTime
+      fps = (fromIntegral frames ) / dtMs
+
+  print $ "FPS: " ++ show fps
 
   quit window renderer
 
@@ -97,18 +109,24 @@ writeState f q pid frame x = case f x of
 runGameReader :: Monad m => GameSettings -> SF (GameEnv m) a b -> SF m a b
 runGameReader gs sf = readerS $ runReaderS_ (runReaderS sf) gs
 
-actuate :: SDL.Renderer -> p -> GameState -> IO Bool
-actuate renderer _ state = do
-  renderGameState renderer state >> return False
+actuate :: IORef Integer -> SDL.Renderer -> p -> GameState -> IO Bool
+actuate frameNrRef renderer _ state = do
+
+  previousFrame <- readIORef frameNrRef
+  writeIORef frameNrRef $ previousFrame + 1
+
+  renderGameState renderer state
+  return (gameOver state)
 
 sense :: IORef DTime -> Bool -> IO (DTime, Maybe GameInput)
 sense timeRef _ = do
-  _ <- fixedTimeStep 16.6 timeRef
+  _ <- fixedTimeStep 16.667 timeRef
   events <- SDL.pollEvents
   when (quitEvent events) exitSuccess
   dir <- direction
   -- print dtSecs
-  return (0.0166, Just $ GameInput dir)
+  return (0.016667, Just $ GameInput dir)
+  -- return (0.0333, Just $ GameInput dir)
   where quitEvent events = elem SDL.QuitEvent $ map SDL.eventPayload events
 
 direction :: IO (Maybe Direction)

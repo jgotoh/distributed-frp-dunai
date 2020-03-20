@@ -61,6 +61,7 @@ data NetState = NetState
   { localPlayerNetState :: !PlayerState
   , remotePlayerNetState :: !PlayerState
   , ballNetState :: !BallState
+  , gameOverNetState :: Bool
   }
   deriving (Generic, Show, Typeable)
 instance Binary NetState
