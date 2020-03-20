@@ -212,12 +212,12 @@ replaceTMVar v a = do
 
 sense :: IORef DTime -> Bool -> IO (DTime, Maybe a)
 sense timeRef _ = do
-  _ <- fixedTimeStep 16.667 timeRef
+  _ <- fixedTimeStep 33.333 timeRef
   -- dtSecs <- senseTime timeRef
   -- print $ "IO dtSecs: " ++ show dtSecs
   -- return (dtSecs, Nothing)
   -- print dtSecs
-  return (0.016667, Nothing)
+  return (0.033333, Nothing)
 
 runGameReader :: Monad m => GameSettings -> SF (GameEnv m) a b -> SF m a b
 runGameReader gs sf = readerS $ runReaderS_ (runReaderS sf) gs

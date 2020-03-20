@@ -120,12 +120,12 @@ actuate frameNrRef renderer _ state = do
 
 sense :: IORef DTime -> Bool -> IO (DTime, Maybe GameInput)
 sense timeRef _ = do
-  _ <- fixedTimeStep 16.667 timeRef
+  _ <- fixedTimeStep 33.333 timeRef
   events <- SDL.pollEvents
   when (quitEvent events) exitSuccess
   dir <- direction
   -- print dtSecs
-  return (0.016667, Just $ GameInput dir)
+  return (0.033333, Just $ GameInput dir)
   -- return (0.0333, Just $ GameInput dir)
   where quitEvent events = elem SDL.QuitEvent $ map SDL.eventPayload events
 
