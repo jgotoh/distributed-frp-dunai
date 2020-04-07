@@ -1,3 +1,5 @@
+-- | This module exports all functions necessarry to create a client application.
+
 {-# LANGUAGE FlexibleContexts #-}
 
 module Network.Client
@@ -5,6 +7,8 @@ module Network.Client
   , searchForServer
   , createServerStateChannel
   , LocalClient(..)
+  , writeCommand
+  , receiveState
   )
 where
 
@@ -21,8 +25,13 @@ import           Control.Monad.STM
 import           Data.ByteString.Char8
 import qualified Network.Transport             as T
 
-data LocalClient a b = LocalClient { clientPid :: P.ProcessId
+-- | A handler to a locally running client process
+data LocalClient a b = LocalClient {
+                       -- | 'ProcessId' of the main client process
+                       pidClient :: P.ProcessId
+                       -- | 'TMVar' containing incoming state. Content is replaced on successive UpdatePackets
                      , readVar :: TMVar (UpdatePacket a)
+                       -- | Write in this 'TMVar' to immediately send a CommandPacket
                      , sendVar :: TMVar (CommandPacket b)
                      }
 
@@ -41,7 +50,7 @@ instance Routable Server where
   unsafeSendTo s m =
     resolve s >>= maybe (error $ unresolvableMessage s) (`P.unsafeSend` m)
 
--- Starts a client, searches for a server and tries to join it
+-- | Starts a client, and tries to join a server
 startClientProcess
   :: (Binary a, Typeable a, Binary b, Typeable b)
   => Node.LocalNode
@@ -89,7 +98,7 @@ clientProcess node server rp rVar sVar = do
   inPid  <- P.liftIO $ Node.forkProcess node (receiveStateProcess rVar rp)
   outPid <- P.liftIO $ Node.forkProcess
     node
-    (sendStateProcess sVar server)
+    (sendCommandProcess sVar server)
 
   P.link inPid
   P.link outPid
@@ -97,7 +106,7 @@ clientProcess node server rp rVar sVar = do
   _ <- P.liftIO $ forever $ threadDelay 100000
   P.liftIO $ print "clientProcess ends"
 
--- Creates a typed channel used by servers to send UpdatePackets to clients.
+-- | Creates a typed channel used by servers to send UpdatePackets to clients.
 createServerStateChannel
   :: (Binary a, Typeable a) => P.Process (ServerStateChannel a)
 createServerStateChannel =
@@ -106,6 +115,7 @@ createServerStateChannel =
     )
     <$> P.newChan
 
+-- | Search for a server process. Needs to be registered as 'name' on a Node identified by 'server' which will be mapped to a 'NodeId'
 searchForServer :: String -> String -> P.Process (Maybe Server)
 searchForServer name server = do
   P.liftIO
@@ -120,7 +130,7 @@ searchForServer name server = do
   serverNode     = P.NodeId serverEndpoint
 
 
--- Process to receive UpdatePackets sent from the server
+-- | Process to receive UpdatePackets sent from the server
 receiveStateProcess
   :: (Binary a, Typeable a)
   => TMVar (UpdatePacket a)
@@ -131,28 +141,18 @@ receiveStateProcess q p =
   where
     writeQ = P.liftIO . atomically . replaceTMVar q
 
--- Empties a TMVar, then writes a new value
-replaceTMVar :: TMVar a -> a -> STM ()
-replaceTMVar v a = do
-  empty' <- isEmptyTMVar v
-  if empty'
-    then putTMVar v a
-    else do
-      _ <- swapTMVar v a
-      return ()
-
--- Process to send CommandPackets to the server
-sendStateProcess
+-- | Process to send CommandPackets to the server
+sendCommandProcess
   :: (Binary a, Typeable a)
   => TMVar (CommandPacket a)
   -> Server
   -> P.Process ()
-sendStateProcess q s = forever $ readQ q >>= sendState
+sendCommandProcess q s = forever $ readQ q >>= sendState
  where
   readQ q' = P.liftIO . atomically $ takeTMVar q'
   sendState = clientUpdate s
 
--- send a JoinRequest that contains the client's nickname and the SendPort to receive simulation state updates
+-- | Send a 'JoinRequest' that contains the client's 'NickName' and the 'SendPort' to receive state updates
 sendJoinRequest
   :: (Binary a, Typeable a)
   => Server
@@ -163,4 +163,13 @@ sendJoinRequest s nick (ServerStateSendPort sp) = do
   P.liftIO $ print $ "send joinRequest: " ++ show request
   joinRequest s request
   where request = JoinRequest nick (ServerStateSendPort sp)
+
+-- TODO Signaturen so ändern, dass LocalClient übergeben wird!
+-- | Put a Command into a 'TMVar' 'q'. If 'q' is currently full, retries until TMVar is empty.
+writeCommand :: TMVar (CommandPacket cmd) -> CommandPacket cmd -> IO ()
+writeCommand q c = atomically $ putTMVar q c
+
+-- | Returns the last received 'UpdatePacket'. If 'TMVar' is empty, returns 'Nothing'.
+receiveState :: TMVar (UpdatePacket a) -> IO (Maybe (UpdatePacket a))
+receiveState = atomically . tryTakeTMVar
 

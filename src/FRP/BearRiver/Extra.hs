@@ -1,3 +1,5 @@
+-- | Some additional functions related to BearRiver.
+
 {-# LANGUAGE RankNTypes #-}
 module FRP.BearRiver.Extra
   ( reactimateServer
@@ -20,6 +22,10 @@ import           Data.Maybe
 import           Data.MonadicStreamFunction.InternalCore
 import           FRP.BearRiver           hiding ( edgeJust )
 
+-- | A variant of 'reactimate' for servers without any consistency maintenance mechanism.
+-- Is compared against Time Warp synchronisation in the thesis.
+-- Is executing commands as soon as they arrive, but only one at a time.
+-- Sends states each frame.
 reactimateServer
   :: Monad m
   => m a
@@ -39,14 +45,15 @@ reactimateServer senseI sense actuate sf netin netout = do
     >>> arr fst
   return ()
 
+-- | Reactimate for clients. Sends 'CommandPackets' and receives 'UpdatePackets' each frame.
 reactimateClient
   :: (HasFrameAssociation netin, Monad m)
-  => m a
-  -> (Bool -> m (DTime, Maybe a)) -- sense
-  -> (Bool -> b -> m Bool) -- actuate
-  -> SF Identity (a, Maybe netin) b -- sf
-  -> m (Maybe netin) -- action to get an UpdatePacket
-  -> (FrameNr -> (DTime, a) -> m ()) -- action that writes a CommandPacket
+  => m a -- ^ initial sense
+  -> (Bool -> m (DTime, Maybe a)) -- ^ sense
+  -> (Bool -> b -> m Bool) -- ^ actuate
+  -> SF Identity (a, Maybe netin) b -- ^ sf
+  -> m (Maybe netin) -- ^ action to get an UpdatePacket
+  -> (FrameNr -> (DTime, a) -> m ()) -- ^ action that writes a CommandPacket
   -> m ()
 reactimateClient senseI sense actuate sf netin netout = do
   MSF.reactimateB
@@ -58,7 +65,7 @@ reactimateClient senseI sense actuate sf netin netout = do
     >>> (actuateSF actuate)
   return ()
 
--- Get the current FrameNr. Starts at x0, increments with each iteration.
+-- | Get the current FrameNr. Starts at 'x0', increments with each iteration.
 -- Current frameNr will be updated when netin contains a value.
 frameNrSF
   :: (HasFrameAssociation netin, Monad m)
@@ -73,6 +80,7 @@ countAndUpdate
   -> MSF m (Maybe netin) (FrameNr, Event FrameNr)
 countAndUpdate x0 = countAt x0 &&& arr ((fmap getFrame) . maybeToEvent)
 
+-- | Start counting at 'x0'. Will return 'x0' on first application.
 countAt :: (Monad m, Num n) => n -> MSF m a n
 countAt x0 = count >>> iPre 0 >>> arr ((+) x0)
 
@@ -127,6 +135,7 @@ dSwitch' sf sfC = MSF $ \a -> do
 replaceOnce' :: Monad m => a -> MSF m a a
 replaceOnce' a = dSwitch' (arr $ const (a, Event ())) (const $ arr id)
 
+-- | 'edge' function for 'Maybe' values. Taken from https://hackage.haskell.org/package/Yampa-0.13.1/docs/src/FRP.Yampa.EventS.html#edgeJust
 edgeJust :: Monad m => SF m (Maybe a) (Event a)
 edgeJust = edgeBy isJustEdge (Just undefined)
  where
@@ -135,7 +144,7 @@ edgeJust = edgeBy isJustEdge (Just undefined)
   isJustEdge (Just _) (   Just _) = Nothing
   isJustEdge (Just _) Nothing     = Nothing
 
--- Apply an SF to a list of inputs and delta time values.
+-- | Apply an SF to a list of inputs and delta time values.
 embedSF :: Monad m => SF m a b -> [(DTime, a)] -> m [b]
 embedSF _  []              = return []
 embedSF sf ((dt', a) : as) = do

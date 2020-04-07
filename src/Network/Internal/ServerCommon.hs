@@ -1,3 +1,4 @@
+-- | This module contains type definitions used by servers. TODO move all functions into Network.Server, and all remaining Type Definitions from Network.Server here
 {-# LANGUAGE DeriveGeneric #-}
 
 module Network.Internal.ServerCommon
@@ -6,7 +7,7 @@ module Network.Internal.ServerCommon
   , ServerState
   , joinRequest
   , ServerConfiguration(..)
-  , serverProcess
+  , apiProcess
   , logTimeout
   , logShutdown
   , withoutClient
@@ -36,19 +37,30 @@ import qualified Control.Distributed.Process.Node
 import qualified Control.Distributed.Process.ManagedProcess.Internal.Types
                                                as MP
 
+-- | Alias for Cloud Haskell's 'ProcessDefinition', specialized to 'ServerState'
 type ServerProcessDefinition a = MP.ProcessDefinition (ServerState a)
 
+-- | The configuration used to start a server using 'startServerProcess'
 data ServerConfiguration a = ServerConfiguration
-  { nodeConfig :: Node.LocalNode
+  { -- | The Node to start the server on
+    nodeConfig :: Node.LocalNode
+    -- | The 'HostName' where the server runs on
   , hostConfig :: N.HostName
+    -- | The 'Port' where the server runs on
   , portConfig :: Port
+    -- | The 'SessionName', the API will be added to Cloud Haskell's process registry under this name. See 'register'
   , nameConfig :: SessionName
+    -- | Definition of the API
   , processDefinitionConfig :: ServerProcessDefinition a
+    -- | Executed when a JoinRequest is processed
   , joinConfig :: ServerState a -> JoinRequest a -> P.Process (JoinRequestResult [Nickname])
   }
 
+-- | A client as used in 'ServerState'
 data Client a = Client
-  { nameClient :: Nickname
+  { -- | Name of the client
+    nameClient :: Nickname
+    -- | 'SendPort' that is used to transmit an application's states
   , serverStateClient :: ServerStateSendPort a
   }
   deriving (Generic, Typeable, Eq)
@@ -68,9 +80,10 @@ instance Routable (Client a) where
   unsafeSendTo s m =
     resolve s >>= maybe (error $ unresolvableMessage s) (`P.unsafeSend` m)
 
+-- | State of a server is a list of connected clients
 type ServerState a = [Client a]
 
--- Sends a JoinRequest and returns the result
+-- | Sends a 'JoinRequest' and returns the result using 'MP.call'
 joinRequest
   :: (Addressable a, Binary m, Typeable m)
   => a
@@ -78,23 +91,24 @@ joinRequest
   -> P.Process (JoinRequestResult [Nickname])
 joinRequest = MP.call
 
--- Call to MP.serve, that monitors clients in initial state
-serverProcess
+-- | Call to 'serve' using the supplied 'ServerProcessDefinition'. 's0' is an initial state, contained clients will be monitored immediately
+apiProcess
   :: (Binary a, Typeable a)
   => ServerProcessDefinition a
   -> ServerState a
   -> P.Process ()
-serverProcess def s0 = MP.serve () initHandler def
+apiProcess def s0 = MP.serve () initHandler def
  where
   initHandler _ = do
     forM_ (serverStateSendPort . serverStateClient <$> s0) P.monitorPort
     return (MP.InitOk s0 Time.NoDelay)
 
--- TODO summarize withoutClient[']. maybe via contramap
+-- | Removes a 'Client' from a 'ServerState' identified by the supplied 'SendPortId'
 withoutClient' :: P.SendPortId -> ServerState a -> ServerState a
 withoutClient' portId =
   filter (not <$> hasProcessId (P.sendPortProcessId portId))
 
+-- | Removes a 'Client' from a 'ServerState' identified by the supplied 'ProcessId'
 withoutClient :: P.ProcessId -> ServerState a -> ServerState a
 withoutClient pid = filter (not <$> hasIdentification pid)
 
@@ -109,34 +123,43 @@ hasIdentification :: P.ProcessId -> Client a -> Bool
 hasIdentification pid c = pid == P.sendPortProcessId
   (P.sendPortId $ serverStateSendPort $ serverStateClient c)
 
+-- | Returns the 'ProcessId' of a 'Client'
 pidClient :: Client a -> P.ProcessId
 pidClient =
   P.sendPortProcessId . P.sendPortId . serverStateSendPort . serverStateClient
 
+-- | Logs Timeouts using 'print'
 logTimeout :: s -> Time.Delay -> MP.Action s
 logTimeout s delay = do
   when (delay /= Time.NoDelay) $ P.liftIO $ print $ "logTimeout: " ++ show delay
   MP.continue s
 
+-- | Logs Shutdowns using 'print'
 logShutdown :: MP.ExitState s -> ExitReason -> P.Process ()
 logShutdown _ reason = P.liftIO $ print $ "logShutdown: " ++ show reason
 
+-- | Send an 'UpdatePacket' to a list of clients
 broadcastUpdate
   :: (Binary a, Typeable a) => [Client a] -> UpdatePacket a -> P.Process ()
 broadcastUpdate clients msg = forM_ clients (serverUpdate msg)
 
+-- | Send an 'UpdatePacket' to a specific clients
 serverUpdate
   :: (Binary a, Typeable a) => UpdatePacket a -> Client a -> P.Process ()
 serverUpdate m c = P.sendChan (serverStateSendPort (serverStateClient c)) m
 
+-- | Convenience function to add an 'apiHandler' to a 'ProcessDefinition'
 addApiHandler
   :: MP.Dispatcher s -> MP.ProcessDefinition s -> MP.ProcessDefinition s
 addApiHandler h def = def { MP.apiHandlers = h : MP.apiHandlers def }
 
+-- | Convenience function to add an 'externHandler' to a 'ProcessDefinition'
 addExternHandler
   :: MP.ExternDispatcher s -> MP.ProcessDefinition s -> MP.ProcessDefinition s
 addExternHandler h def = def { MP.externHandlers = h : MP.externHandlers def }
 
+-- | Convenience function to add an 'infoHandler' to a 'ProcessDefinition'
 addInfoHandler
   :: MP.DeferredDispatcher s -> MP.ProcessDefinition s -> MP.ProcessDefinition s
 addInfoHandler h def = def { MP.infoHandlers = h : MP.infoHandlers def }
+

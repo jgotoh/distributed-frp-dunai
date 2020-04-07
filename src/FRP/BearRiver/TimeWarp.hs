@@ -1,3 +1,5 @@
+-- | This module provides a variant of the 'reactimate' function that uses Time Warp Synchronisation for use in server applications. 'reactimateTimeWarp' is important here, the rest is just exported for unit tests.
+
 module FRP.BearRiver.TimeWarp
   ( reactimateTimeWarp
   , stepSF
@@ -32,7 +34,7 @@ import           Control.Monad.Trans.MSF.Except
 import           Data.MonadicStreamFunction.InternalCore
                                                 ( MSF(..) )
 
--- Used in TimeWarp synchronisation to save processed sf inputs.
+-- | Used in TimeWarp synchronisation to save processed sf inputs.
 newtype ProcessedInput a msg = ProcessedInput (FrameNr, (a, [msg]))
   deriving Show
 
@@ -47,16 +49,28 @@ instance HasFrameAssociation (ProcessedInput a msg) where
 
 -- TODO doc
 -- code generation from proc syntax can lead to loss of performance apparently
+-- TODO remove show constraint
 -- see https://stackoverflow.com/questions/45260173/proc-syntax-in-haskell-arrows-leads-to-severe-performance-penalty
+-- | A version of 'reactimate' using Time Warp.
+-- 'nin': type that is used as network input for 'sf'
+-- 'any': result of sending states action. Will be discarded
+-- 'senseI' is an initial sense action at time = 0
+-- 'sense', gather input, calculate 'DTime'
+-- 'actuate' output, render
+-- 'sf' actual FRP. Will rollback, if a message for an earlier Frame arrives
+-- 'netin' action to receive commands
+-- 'netout' action to send states
+-- 'maxFrames' maximum number of frames that is saved for rollback
+-- To detect, whether a message for an earlier frame arrives, network input 'nin' needs to be an instance of 'HasFrameAssociation'. 'Ord' instance is necessary to sort messages by 'FrameNr'.
 reactimateTimeWarp
-  :: (Show a, Show p1, Monad m, HasFrameAssociation p1, Ord p1)
-  => m a -- first sense
-  -> (Bool -> m (DTime, Maybe a)) -- sense
-  -> (Bool -> b -> m Bool) -- actuate
-  -> SF Identity (FrameNr, (a, [p1])) b -- sf
-  -> m [p1] -- netin, no need to manually sort by frameNr
-  -> ((FrameNr, b) -> m b2) -- netout
-  -> Natural -- maximum number of frames to rollback
+  :: (Show a, Show nin, Monad m, HasFrameAssociation nin, Ord nin)
+  => m a                                 -- ^ first sense
+  -> (Bool -> m (DTime, Maybe a))        -- ^ sense
+  -> (Bool -> b -> m Bool)               -- ^ actuate
+  -> SF Identity (FrameNr, (a, [nin])) b -- ^ sf
+  -> m [nin]                             -- ^ receive
+  -> ((FrameNr, b) -> m any)             -- ^ send
+  -> Natural                             -- ^ maximum number of frames to rollback
   -> m ()
 reactimateTimeWarp senseI sense actuate sf netin netout maxFrames = do
   MSF.reactimateB $ feedback mempty $ proc ((), unprocessed) -> do
@@ -73,8 +87,8 @@ reactimateTimeWarp senseI sense actuate sf netin netout maxFrames = do
     returnA -< (exit', nextMessages)
   return ()
 
--- uses feedback to save last n inputs
--- decides whether to rollback and use previous inputs
+-- | An MSF that performs rollbacks when necessary.
+-- Uses feedback to save last n inputs
 stepSF
   :: (Show a, Show msg, Monad m, Ord msg, HasFrameAssociation msg)
   => MSF m (Natural, (a, [msg])) b
@@ -82,6 +96,8 @@ stepSF
   -> MSF m (FrameNr, (a, MessageBuffer msg)) b
 stepSF sf maxFrames = feedback mempty $ timeWarpStep sf maxFrames
 
+-- | An MSF that performs rollbacks when necessary.
+-- Saved inputs (sensed and commands) have to be manually passed into it, see 'stepSF'.
 timeWarpStep
   :: (Show a, Show msg, Monad m, Ord msg, HasFrameAssociation msg)
   => MSF m (Natural, (a, [msg])) b -- Natural is FrameDt!
@@ -113,7 +129,7 @@ timeWarpStep sf maxFrames = MSF $ \((n, (a, qi)), pi) -> do
       | otherwise -> error "should not happen"
   return ((b, takeTail maxFrames pi'), timeWarpStep sf' maxFrames)
 
--- Adds a single input (a, msg) for a frame to an existing buffer
+-- | Adds a single input '(a, msg)' for a frame to an existing buffer
 addProcessed
   :: (Ord msg)
   => MessageBuffer (ProcessedInput a msg)
@@ -123,7 +139,7 @@ addProcessed
 addProcessed pi frame (a, ms) =
   pi <> singleton (ProcessedInput (frame, (a, toList ms)))
 
--- Adds a to pi, then merges qi into corresponding ProcessedInputs (inputs with matching FrameAssociation/ FrameNr)
+-- | Adds 'a' to 'pi', then merges 'qi' into corresponding 'ProcessedInputs' (inputs with matching FrameAssociation/ FrameNr)
 processedAfterRollback
   :: (HasFrameAssociation msg, Ord msg)
   => MessageBuffer (ProcessedInput a msg)
@@ -133,9 +149,9 @@ processedAfterRollback
   -> (MessageBuffer (ProcessedInput a msg))
 processedAfterRollback pi n a qi = do
   let pi' = pi <> singleton (ProcessedInput (n, (a, [])))
-  mergeB pi' qi -- TODO too old messages are implicitly thrown away when using mergeB
+  mergeB pi' qi
 
--- Convertes sublist of ProcessedInput starting at t0 to unprocessed input.
+-- | Convertes sublist of ProcessedInput starting at 't0' to unprocessed input.
 rollbackInputs
   :: MessageBuffer (ProcessedInput a msg)
   -> FrameNr
@@ -151,7 +167,7 @@ rollbackInputs pi t0 t =
 inputWithDt :: ProcessedInput a msg -> FrameNr -> (Natural, (a, [msg]))
 inputWithDt (ProcessedInput (_, x)) n' = (n', x)
 
--- Applies a MSF to a list of inputs. Returns the last returned value and continuation.
+-- | Applies a rolled back MSF to a list of inputs. Returns the last returned value and continuation.
 performRollback
   :: Monad m
   => MSF m (Natural, (a, [msg])) b
@@ -161,7 +177,7 @@ performRollback sf xs = do
   bs <- processInputs' sf xs
   return $ last bs
 
--- Applies a MSF to a list of inputs. Returns list of returned values and continuations.
+-- | Applies a rolled back MSF to a list of inputs. Returns list of all returned values and continuations.
 processInputs'
   :: Monad m
   => MSF m (Natural, (a, [msg])) b
@@ -196,9 +212,9 @@ actuateSF actuate = arr (\x -> (True, x)) >>> arrM (uncurry actuate)
 sfIO :: Monad m => MSF (ReaderT r Identity) a b -> MSF m (r, a) b
 sfIO sf = morphS (return . runIdentity) (runReaderS sf)
 
--- merge buffer qi into pi.
--- Every element with equal framenumbers in pi and qi will be merged.
--- Elements in qi, which do not have a corresponding element in pi are discarded.
+-- | Merge buffer 'qi' into 'pi'.
+-- Every element with equal framenumbers in 'pi' and 'qi' will be merged.
+-- Elements in 'qi', which do not have a corresponding element in 'pi' are discarded.
 mergeB
   :: (Ord msg, HasFrameAssociation msg)
   => MessageBuffer (ProcessedInput a msg)

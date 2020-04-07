@@ -1,3 +1,5 @@
+-- | This module exports all functions necessary to create a server application. Main function is 'startServerProcess'
+
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -19,6 +21,10 @@ module Network.Server
   , module Control.Distributed.Process.Extras
   , addApiHandler
   , Network.Internal.ServerCommon.pidClient
+  , receiveCommand
+  , receiveCommands
+  , writeState
+  , replaceTMVar
   )
 where
 import           Data.Binary                    ( Binary )
@@ -28,6 +34,7 @@ import           Network.Internal.ServerCommon
 import           Control.Concurrent
 import           Control.Concurrent.STM
 import           Control.Monad.Catch
+import           Control.Concurrent.STM.TQueue
 import           Control.Monad.State
 import qualified Control.Distributed.Process   as P
 import qualified Control.Distributed.Process.Extras.Time
@@ -37,13 +44,9 @@ import qualified Control.Distributed.Process.ManagedProcess
                                                as MP
 import qualified Control.Distributed.Process.Node
                                                as Node
--- import           Control.Monad
 import qualified Network.Socket                as N
--- import qualified Network.Transport.TCP         as NT
 
--- client facing API --
-
--- Sends a Command packet
+-- | Send a Command packet to a server 'a'.
 clientUpdate
   :: (Addressable a, Binary m, Typeable m)
   => a
@@ -51,16 +54,22 @@ clientUpdate
   -> P.Process ()
 clientUpdate = MP.cast
 
--- server setup --
-
+-- | A handler to a locally running server process. 'a' is the type of commands, 'b' is the type of exchanged state.
 data LocalServer a b = LocalServer {
+  -- | The main ProcessId of the server
   pidServer :: P.ProcessId
+  -- | This TMVar is filled after the server has started, or after an error has occured.
+  -- Contains the Pid of the api process
   , pidApiServer :: TMVar (Either SomeException P.ProcessId)
-  , sendQueue :: TMVar ([(P.SendPort (UpdatePacket b), UpdatePacket b)])
+  -- | Write in this Var to send a list of UpdatePackets to specified SendPorts.
+  , sendVar :: TMVar ([(P.SendPort (UpdatePacket b), UpdatePacket b)])
+  -- | Contains all 'CommandPackets' received via 'clientUpdate'
   , readQueue :: TQueue (CommandPacket a)
+  -- | Contains the list of currently connected clients
   , stateServer :: TVar (ServerState b)
   }
 
+-- | Type of values that have an associated 'ServerState'
 class HasState a b | a -> b where
   getState :: a -> IO (ServerState b)
   getStateSTM :: a -> STM (ServerState b)
@@ -84,7 +93,7 @@ instance Routable (LocalServer a b) where
   unsafeSendTo s m =
     resolve s >>= maybe (error $ unresolvableMessage s) (`P.unsafeSend` m)
 
--- default ServerConfiguration that accepts every JoinRequest.
+-- | Default 'ServerConfiguration' that accepts every 'JoinRequest'.
 defaultServerConfig
   :: (Binary a, Typeable a)
   => Node.LocalNode
@@ -103,7 +112,7 @@ defaultServerConfig node ip port name def = ServerConfiguration
     \s _ -> return $ JoinRequestResult $ Right $ JoinAccepted $ map nameClient s
   }
 
--- default ProcessDefinition that terminates on unhandled messages, logs timeouts and shutdowns.
+-- | Default ProcessDefinition that terminates on unhandled messages using 'Terminate', logs timeouts and shutdowns, has no apiHandlers, infoHandlers and exitHandlers.
 defaultFRPProcessDefinition
   :: (Binary a, Typeable a) => ServerProcessDefinition a
 defaultFRPProcessDefinition = MP.defaultProcess
@@ -115,7 +124,7 @@ defaultFRPProcessDefinition = MP.defaultProcess
   , MP.unhandledMessagePolicy = MP.Terminate
   }
 
--- Starts a server using the supplied config, writes into TMVar when start was successful
+-- | Starts a server using the supplied config, writes into TMVar when start was successful
 startServerProcess
   :: forall a b
    . (Binary a, Typeable a, Binary b, Typeable b)
@@ -123,7 +132,7 @@ startServerProcess
   -> IO (LocalServer a b)
 startServerProcess cfg = do
   started <- newEmptyTMVarIO
-  sendVar <- newEmptyTMVarIO
+  sendVar' <- newEmptyTMVarIO
   rQueue  <- newTQueueIO
   stateV  <- newTVarIO state0
   pid     <- Node.forkProcess node $ catch
@@ -147,15 +156,17 @@ startServerProcess cfg = do
       let def'' =
             addApiHandler (MP.handleCast $ handleCommandPacket rQueue) def'
 
-      pid <- P.spawnLocal $ serverProcess def'' state0
+      pid <- P.spawnLocal $ apiProcess def'' state0
 
       -- let server = LocalServer mainPid started sendVar rQueue stateV
 
       -- TODO create/ destroy Updaters dynamically when clients join/ quit
+      -- spawns processes that send individual StateUpdates
       updaters <- (fmap . fmap . fmap) fst spawnUpdateProcesses 2
 
+      -- spawns process that receives stateUpdates and distributes them to UpdateSenderProcesses
       outPid   <- P.spawnLocal
-        (sendStateProcessSTM updaters sendVar (Time.milliSeconds 50))
+        (sendStateProcessSTM updaters sendVar' (Time.milliSeconds 50))
 
       P.link pid
       P.link outPid
@@ -168,7 +179,7 @@ startServerProcess cfg = do
         ++ show mainPid
         ++ " Api ProcessId:"
         ++ show pid
-      -- localNodeId <- Node.localNodeId node
+
       P.register (nameConfig cfg) pid
       P.liftIO . atomically $ putTMVar started (Right pid)
       P.liftIO $ forever $ threadDelay 16
@@ -180,7 +191,7 @@ startServerProcess cfg = do
       P.liftIO $ print $ show (e :: SomeException)
       throwM e
     )
-  return $ LocalServer pid started sendVar rQueue stateV
+  return $ LocalServer pid started sendVar' rQueue stateV
  where
   node   = nodeConfig cfg
   state0 = []
@@ -231,7 +242,7 @@ spawnUpdateProcesses
   -> P.Process [(TMVar (P.SendPort b, b), P.ProcessId)]
 spawnUpdateProcesses n = forM [1 .. n] (\_ -> spawnUpdateProcess)
 
--- Spawn a process that sends messages on a typed channel. Messages to send are transmitted via the returned TMVar. Process can be quit via the returned ProcessId.
+-- | Spawn a process that sends messages on a typed channel. Messages to send are transmitted via the returned TMVar. Process can be quit via the returned ProcessId.
 spawnUpdateProcess
   :: (Binary b, Typeable b)
   => P.Process (TMVar (P.SendPort (b), b), P.ProcessId)
@@ -240,7 +251,7 @@ spawnUpdateProcess = do
   pid <- P.spawnLocal $ updateProcess v
   return (v, pid)
 
--- Never ending process to send updates to SendPorts as soon as they are available in the TMVar.
+-- | Never ending process to send updates to SendPorts as soon as they are available in the TMVar
 updateProcess
   :: (Binary b, Typeable b) => TMVar (P.SendPort b, b) -> P.Process ()
 updateProcess v = forever $ do
@@ -250,7 +261,7 @@ updateProcess v = forever $ do
 
 -- Other functions --
 
--- Blocks until the state satisfies a certain condition
+-- | Blocks until the 'ServerState' satisfies a certain condition
 waitUntilState
   :: (HasState s a) => s -> (ServerState a -> Bool) -> IO (ServerState a)
 waitUntilState hs f = atomically $ do
@@ -261,7 +272,8 @@ waitUntilState hs f = atomically $ do
 
 -- Api Handlers --
 
--- runs resultP to decide whether req is accepted. Accepted clients will be added to the end of the current state. Result will be sent to the client.
+-- | This function is called on incoming JoinRequests.
+-- Runs 'resultP' to decide whether 'req' is accepted. Accepted clients will be added to the end of the current state. Result will be sent to the client.
 handleJoinRequest
   :: (Binary a, Typeable a)
   => TVar [Client a]
@@ -316,4 +328,43 @@ handleMonitorNotification v s (P.PortMonitorNotification ref port reason) = do
   P.unmonitor ref
   MP.continue s'
   where s' = withoutClient' port s
+
+-- | Remove and return the first element of a 'TQueue'.
+receiveCommand
+  :: TQueue a
+  -> IO [a]
+receiveCommand =
+  (   next'
+  >=> (\c -> return $ case c of
+        Nothing  -> []
+        Just cmd -> [cmd]
+      )
+  )
+  where next' = atomically . tryReadTQueue
+
+-- | Returns all elements of a 'TQueue'. The Queue is empty afterwards.
+receiveCommands
+  :: Control.Concurrent.STM.TQueue.TQueue a
+  -> IO [a]
+receiveCommands = next'
+  where next' = atomically . flushTQueue
+
+-- | Write a list of UpdatePackets which should be sent to a specific 'SendPort' into a 'TMVar', which is usually the 'sendVar' of a 'LocalServer'.
+-- If the 'TMVar' already contains a value, it will be replaced.
+writeState
+  :: TMVar [(P.SendPort (UpdatePacket b), UpdatePacket b)]
+  -> [(P.SendPort (UpdatePacket b), UpdatePacket b)]
+  -> IO ()
+writeState v xs = do
+  atomically $ replaceTMVar v xs
+
+-- | If the variable is empty, 'a' will be put into it. Otherwise the value will be replaced. Note that 'swapTMVar' works differently, as it first waits for the variable to be filled. TODO move to Network.Common
+replaceTMVar :: TMVar a -> a -> STM ()
+replaceTMVar v a = do
+  empty' <- isEmptyTMVar v
+  if empty'
+    then putTMVar v a
+    else do
+      _ <- takeTMVar v
+      putTMVar v a
 
