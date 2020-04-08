@@ -8,9 +8,12 @@ where
 
 import           Control.Concurrent
 import           Control.Concurrent.STM
+import           Control.Exception.Base         ( IOException )
 import           Control.Monad
 import           Network.Common
 import           Network.Server
+import qualified Network.Socket                as N
+import qualified Network.Transport.TCP         as NT
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import qualified Control.Distributed.Process   as P
@@ -18,12 +21,8 @@ import qualified Control.Distributed.Process.Node
                                                as Node
 import qualified Control.Distributed.Process.Extras.SystemLog
                                                as Log
--- import qualified Control.Distributed.Process.ManagedProcess
-                                               -- as MP
--- import           Control.Distributed.Process.Extras
--- import qualified Network.Transport.TCP         as NT
-
 import qualified Network.Transport             as T
+
 data TestMessage = Ping | Pong
   deriving (Generic, Show, Typeable, Eq)
 instance Binary TestMessage
@@ -65,11 +64,6 @@ tests mkNT = testGroup
   , testCase "testing join requests" $ mkNT >>= testJoinRequests
   , testCase "testing clientUpdate" $ mkNT >>= testClientUpdates
   ]
-
--- TODO Tests a server that is running a simulation
--- Snapshots of the simulation (UpdatePacket) are sent at a static rate
--- s -> c updaterate
--- test sendStateProcess
 
 -- Tests whether CommandPackets sent by clientUpdate are correctly added to the receivingQueue of a server
 testClientUpdates :: (Node.LocalNode, T.Transport) -> Assertion
@@ -243,3 +237,13 @@ withServer mkServer test n = do
 -- # state Updates are generic, users of the library can decide what types of data should be transmitted and how network data is processed
 -- servers need way to run simulations themselves
 
+initializeNode
+  :: N.HostName -> Port -> IO (Either IOException (Node.LocalNode, T.Transport))
+initializeNode ip port = do
+  t <- NT.createTransport (NT.defaultTCPAddr ip (show port))
+                          NT.defaultTCPParameters
+  case t of
+    Left  l -> return $ Left l
+    Right r -> do
+      n <- createLocalNode r
+      return $ Right (n, r)

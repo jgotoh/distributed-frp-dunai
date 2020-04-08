@@ -18,7 +18,6 @@ module Network.Common
   , JoinAccepted(..)
   , JoinError(..)
   , createLocalNode
-  , initializeNode
   , Binary
   , Generic
   , Typeable
@@ -45,10 +44,7 @@ import           Control.Distributed.Process.Extras.Internal.Types
 import qualified Control.Distributed.Process.Node
                                                as Node
 import           Control.Distributed.Process.Serializable
-import qualified Network.Transport.TCP         as NT
-import qualified Network.Socket                as N
 import           Numeric.Natural
-import           Control.Exception.Base         ( IOException )
 import           Data.Binary                    ( Binary )
 import qualified Network.Transport             as T
 import           Network.Socket                 ( HostName
@@ -204,20 +200,6 @@ searchProcessTimeout name addr timeLeft
 -- | Convenience function to create a 'Node.LocalNode'
 createLocalNode :: T.Transport -> IO Node.LocalNode
 createLocalNode transport = Node.newLocalNode transport Node.initRemoteTable
-
--- | Create a 'Node.LocalNode' and a TCP 'T.Transport'.
--- TODO Should be moved to 'distributed-paddles' to ensure the lib does not depend on TCP
-initializeNode
-  :: N.HostName -> Port -> IO (Either IOException (Node.LocalNode, T.Transport))
-initializeNode ip port = do
-  -- TODO is Bifunctor.second usable here?
-  t <- NT.createTransport (NT.defaultTCPAddr ip (show port))
-                          NT.defaultTCPParameters
-  case t of
-    Left  l -> return $ Left l
-    Right r -> do
-      n <- createLocalNode r
-      return $ Right (n, r)
 
 -- | runs a Process, blocks until it finishes. Result contains a value if the process did not terminate unexpectedly
 runProcessIO :: Node.LocalNode -> P.Process a -> IO (Maybe a)

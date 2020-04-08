@@ -21,6 +21,7 @@ import           Data.IORef
 import           GameState
 import           Time
 import           FRP.BearRiver
+import           ProcessExtra
 import           FRP.BearRiver.Network.Reactimate
 import qualified Control.Distributed.Process   as P
 import           Types

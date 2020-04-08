@@ -5,6 +5,7 @@ import           Display
 import           GameState
 import           ClientGame
 import           ServerMain
+import           ProcessExtra
 import           Network.Client
 import           Network.Common
 import           Time
