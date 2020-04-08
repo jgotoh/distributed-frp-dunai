@@ -1,12 +1,10 @@
 name:                distributed-frp-dunai
 version:             0.1.0.0
 synopsis:            Extensions to dunai library adding support for distributed applications
--- description:
 license:             BSD3
 license-file:        LICENSE
 author:              Julian Götz
 maintainer:          juliangoetz632@gmail.com
--- copyright:
 category:            Reactivity, FRP, Network
 build-type:          Simple
 extra-source-files:  ChangeLog.md
@@ -26,7 +24,6 @@ library
 
   other-modules:     Network.Internal.ServerCommon
   ghc-options:         -Wall
-  -- other-extensions:
   build-depends:       base,
                        bearriver,
                        binary,
@@ -51,59 +48,23 @@ library
   default-extensions:  Arrows,
                        BangPatterns
 
-library examples-common
-  exposed-modules:     Collision, Config, Display, Input, Time, Types
-  hs-source-dirs:      examples-common
-  default-language:    Haskell2010
-  default-extensions:  Arrows,
-                       BangPatterns
-  ghc-options:         -Wall
-  build-depends:       base,
-                       bearriver,
-                       optparse-applicative,
-                       sdl2,
-                       sdl2-gfx,
-                       text
-
--- temporarily deactivated because of compile erros
---executable simple-example
---  main-is:             Main.hs
---  other-modules:       Game, GameState
---  --ghc-options:         
---  --                     -fprof-auto
---  --                     "-with-rtsopts=-p -s -hd"
--- other-extensions:
--- build-depends:       base,
---                       bearriver,
---                       bytestring,
---                       distributed-process,
---                       distributed-process-client-server,
---                       distributed-process-extras,
---                       dunai,
---                       exceptions,
---                       examples-common,
---                       monadIO,
---                       mtl,
---                       network,
---                       distributed-frp-dunai,
---                       sdl2,
---                       stm >= 2.4.5,
---                       transformers-base
---  hs-source-dirs:      simple-example
---  default-language:    Haskell2010
---  default-extensions:  Arrows
-
 executable distributed-paddles
   main-is:             Main.hs
   other-modules:       
-                       GameState,
                        ClientGame,
                        ClientMain,
+                       Collision,
+                       Config,
+                       Display,
+                       GameState,
+                       Input,
                        ServerGame,
                        ServerMain
+                       Time,
+                       Types
   ghc-options:         -Wall
-                       -prof
-                       -fprof-auto
+                       -- -prof
+                       -- -fprof-auto
   build-depends:       base,
                        bearriver,
                        binary,
@@ -114,14 +75,15 @@ executable distributed-paddles
                        distributed-process-extras,
                        dunai,
                        exceptions,
-                       examples-common,
                        monadIO,
                        mtl,
                        network,
+                       optparse-applicative,
                        distributed-frp-dunai,
                        sdl2,
+                       sdl2-gfx,
                        stm >= 2.4.5,
-                       transformers-base
+                       text
   hs-source-dirs:      distributed-paddles
   default-language:    Haskell2010
   default-extensions:  Arrows,
