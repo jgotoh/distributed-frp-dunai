@@ -1,6 +1,6 @@
 -- | This module provides a variant of the 'reactimate' function that uses Time Warp Synchronisation for use in server applications. 'reactimateTimeWarp' is important here, the rest is just exported for unit tests.
 
-module FRP.BearRiver.TimeWarp
+module FRP.BearRiver.Network.TimeWarp
   ( reactimateTimeWarp
   , stepSF
   , timeWarpStep
@@ -47,10 +47,6 @@ instance Ord (ProcessedInput a msg) where
 instance HasFrameAssociation (ProcessedInput a msg) where
   getFrame (ProcessedInput (x, _)) = x
 
--- TODO doc
--- code generation from proc syntax can lead to loss of performance apparently
--- TODO remove show constraint
--- see https://stackoverflow.com/questions/45260173/proc-syntax-in-haskell-arrows-leads-to-severe-performance-penalty
 -- | A version of 'reactimate' using Time Warp.
 -- 'nin': type that is used as network input for 'sf'
 -- 'any': result of sending states action. Will be discarded
@@ -235,7 +231,6 @@ mergeMatches as bs p f = case toList as of
   a : as' -> mergeMatch a bs p f <> mergeMatches (fromList as') bs p f
   []      -> as
 
--- TODO should be basically some kind of fold
 mergeMatch
   :: (Ord a, Ord b)
   => a

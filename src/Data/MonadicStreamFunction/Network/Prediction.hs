@@ -4,7 +4,7 @@
 
 {-# LANGUAGE RankNTypes #-}
 
-module Data.MonadicStreamFunction.DeadReckoning
+module Data.MonadicStreamFunction.Network.Prediction
   ( drm
   , predict
   )

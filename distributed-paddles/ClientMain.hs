@@ -19,7 +19,7 @@ import           Control.Monad.STM
 import           Control.Monad.Trans.MSF.Reader
 import           Data.IORef
 import           FRP.BearRiver
-import           FRP.BearRiver.Extra
+import           FRP.BearRiver.Network.Reactimate
 import qualified SDL
 import           System.Exit
 

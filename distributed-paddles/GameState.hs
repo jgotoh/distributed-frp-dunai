@@ -7,7 +7,7 @@ module GameState where
 import           Collision
 import           Data.Binary
 import           FRP.BearRiver
-import           FRP.BearRiver.DeadReckoning
+import           FRP.BearRiver.Network.Prediction
 import           GHC.Generics                   ( Generic )
 import           Type.Reflection
 import           Types

@@ -5,7 +5,7 @@ module ExtraTest
     ) where
 
 import FRP.BearRiver
-import FRP.BearRiver.Extra
+import FRP.BearRiver.Network.Reactimate
 import           Test.Tasty
 import           Test.Tasty.HUnit
 

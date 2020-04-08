@@ -1,6 +1,6 @@
 -- | Functions enabling an MSF to save its last continuations and roll back to one of them.
 
-module Data.MonadicStreamFunction.TimeWarp
+module Data.MonadicStreamFunction.Network.TimeWarp
   ( consCap
   , selectSF
   , warpSF

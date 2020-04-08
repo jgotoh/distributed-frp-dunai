@@ -11,7 +11,7 @@ import           Data.MonadicStreamFunction
                                          hiding ( trace )
 import           Numeric.Natural
 import           Data.MonadicStreamFunction.InternalCore
-import           Data.MonadicStreamFunction.TimeWarp
+import           Data.MonadicStreamFunction.Network.TimeWarp
 import           Control.Monad.Trans.MSF
 import           Test.Tasty
 import           Test.Tasty.HUnit

@@ -8,11 +8,10 @@ module ClientGame
   )
 where
 
-import Types
+import           Types
 import           Config
 import           ServerGame
-import           FRP.BearRiver.DeadReckoning
-import           Data.MonadicStreamFunction.DeadReckoning
+import           FRP.BearRiver.Network.Prediction
 import           Data.MonadicStreamFunction.Extra
 import           Control.Monad.Trans.MSF.Reader
 import           Network.Common

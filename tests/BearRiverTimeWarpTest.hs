@@ -11,7 +11,7 @@ import           GHC.Exts
 import           Prelude                 hiding ( pi
                                                 , concat
                                                 )
-import           FRP.BearRiver.TimeWarp
+import           FRP.BearRiver.Network.TimeWarp
 import           Control.Exception
 import           Data.MessageBuffer
 import           Numeric.Natural
@@ -19,7 +19,7 @@ import           FRP.BearRiver
 import           Network.Common
 import           Test.Tasty
 import           Test.Tasty.HUnit
-import           Data.MonadicStreamFunction.TimeWarp
+import           Data.MonadicStreamFunction.Network.TimeWarp
 
 bearRiverTimeWarpTests :: TestTree
 bearRiverTimeWarpTests = tests

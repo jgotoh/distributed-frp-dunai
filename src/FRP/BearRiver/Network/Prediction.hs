@@ -5,10 +5,11 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE FlexibleInstances #-}
 
-module FRP.BearRiver.DeadReckoning
+module FRP.BearRiver.Network.Prediction
   ( drmZero
   , drmFirst
   , drmSecond
+  , predict
   , HasPosition(..)
   , HasVelocity(..)
   , HasAcceleration(..)
@@ -16,7 +17,7 @@ module FRP.BearRiver.DeadReckoning
 where
 
 import           Data.VectorSpace
-import           Data.MonadicStreamFunction.DeadReckoning
+import           Data.MonadicStreamFunction.Network.Prediction
 import           FRP.BearRiver
 
 -- | Types that have a position vector.

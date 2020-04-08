@@ -14,14 +14,14 @@ import           Control.Monad.STM
 import           Control.Concurrent.STM.TMVar
 import qualified Data.Map.Strict               as Map
 import           Control.Monad.Trans.MSF.Reader
-import           FRP.BearRiver.TimeWarp
+import           FRP.BearRiver.Network.TimeWarp
 import           Network.Common
 import           Network.Server
 import           Data.IORef
 import           GameState
 import           Time
 import           FRP.BearRiver
-import           FRP.BearRiver.Extra
+import           FRP.BearRiver.Network.Reactimate
 import qualified Control.Distributed.Process   as P
 import           Types
 import qualified SDL

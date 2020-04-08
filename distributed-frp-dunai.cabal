@@ -12,11 +12,12 @@ cabal-version:       >=1.10
 
 library
   exposed-modules:   Data.MonadicStreamFunction.Extra
-                     Data.MonadicStreamFunction.DeadReckoning
-                     Data.MonadicStreamFunction.TimeWarp
+                     Data.MonadicStreamFunction.Network.Prediction
+                     Data.MonadicStreamFunction.Network.TimeWarp
                      FRP.BearRiver.Extra
-                     FRP.BearRiver.DeadReckoning
-                     FRP.BearRiver.TimeWarp
+                     FRP.BearRiver.Network.Prediction
+                     FRP.BearRiver.Network.Reactimate
+                     FRP.BearRiver.Network.TimeWarp
                      Data.MessageBuffer
                      Network.Client
                      Network.Common
@@ -117,5 +118,6 @@ test-suite distributed-frp-dunai-tests
   other-modules:       ExtraTest,
                        ServerTest,
                        TimeWarpTest,
+                       BearRiverDRMTest,
                        BearRiverTimeWarpTest
   

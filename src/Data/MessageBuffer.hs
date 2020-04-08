@@ -1,4 +1,4 @@
--- | Datatype for sorted list of messages, basically wraps 'SL.SortedList' for use in Time Warp synchronisation.
+-- | Datatype for sorted list of messages, basically wraps 'SL.SortedList' for internal use in Time Warp synchronisation.
 
 {-# LANGUAGE OverloadedLists, TypeFamilies #-}
 

@@ -8,7 +8,7 @@ where
 
 import           Data.Vector2
 import           FRP.BearRiver
-import           FRP.BearRiver.DeadReckoning
+import           FRP.BearRiver.Network.Prediction
 import           FRP.BearRiver.Extra
 import           Test.Tasty
 import           Test.Tasty.HUnit

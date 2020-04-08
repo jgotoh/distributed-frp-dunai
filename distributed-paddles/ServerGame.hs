@@ -15,7 +15,7 @@ import           Types
 import           Data.Maybe
 import qualified Data.Map.Strict               as Map
 import           Data.Map.Strict                ( (!) )
-import           Data.MonadicStreamFunction.TimeWarp
+import           Data.MonadicStreamFunction.Network.TimeWarp
 import           FRP.BearRiver.Extra
 import           Data.MonadicStreamFunction.Extra
 import           Control.Monad.Trans.MSF.Reader
