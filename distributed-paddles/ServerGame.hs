@@ -60,7 +60,7 @@ serverSFWarp
        (GameEnv m)
        (Natural, (GameInput, [CommandPacket Command]))
        GameState
-serverSFWarp pids frames = warpSF frames $ feedbackM act (loopingGame pids) >>> checkTime
+serverSFWarp pids frames = rollbackMSF frames $ feedbackM act (loopingGame pids) >>> checkTime
  where
   act = do
     gs <- lift ask

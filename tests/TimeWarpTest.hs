@@ -24,11 +24,11 @@ tests :: TestTree
 tests = testGroup
   "TimeWarpTests"
   [ testCase "embed bouncingBall"        testBouncingBall
-  , testCase "embed toWarpSF"            testToWarpSF
+  , testCase "embed toRollbackMSF"            testToRollbackMSF
   , testCase "test consCap"              testConsCap
   , testCase "test selectSF"             testSelectSF
-  , testCase "embed warpSF bouncingBall" testWarpSF
-  , testCase "embed warpSF count"        testWarpSFCount
+  , testCase "embed rollbackMSF bouncingBall" testRollbackMSF
+  , testCase "embed rollbackMSF count"        testRollbackMSFCount
   ]
 
 testBouncingBall :: Assertion
@@ -48,7 +48,6 @@ testConsCap = do
 
 testSelectSF :: Assertion
 testSelectSF = do
-  -- selects (arr $ \() -> 10)
   (sf0, [sf0']) <- selectSF 0 (arr $ \() -> 10) [(arr $ \() -> 11)]
   (x0 , _     ) <- unMSF sf0 ()
   x0 @?= (10 :: Integer)
@@ -80,11 +79,11 @@ testSelectSF = do
   (x3', _) <- unMSF sf3' ()
   x3' @?= (13 :: Integer)
 
--- Tests toWarpSF with manually created input continuations to choose from
-testToWarpSF :: Assertion
-testToWarpSF = do
+-- Tests toRollbackMSF with manually created input continuations to choose from
+testToRollbackMSF :: Assertion
+testToRollbackMSF = do
   let sf =
-        toWarpSF 10 $ bouncingBall 0 1 :: MSF
+        toRollbackMSF 10 $ bouncingBall 0 1 :: MSF
             IO
             ((Natural, ()), [MSF IO () Ball])
             (Ball, [MSF IO () Ball])
@@ -117,10 +116,10 @@ testToWarpSF = do
 
   assertThrows (embed sf $ [sfInput 1 []])
 
--- Tests warpSF using count SF
-testWarpSFCount :: Assertion
-testWarpSFCount = do
-  let sf = warpSF 10 $ count :: MSF IO (Natural, ()) Integer
+-- Tests rollbackMSF using count SF
+testRollbackMSFCount :: Assertion
+testRollbackMSFCount = do
+  let sf = rollbackMSF 10 $ count :: MSF IO (Natural, ()) Integer
       sfInput x = ((x, ()))
 
   rs0 <- embed sf $ replicate 5 $ sfInput 0
@@ -140,10 +139,10 @@ testWarpSFCount = do
   rs4 @?= [1, 2, 2, 2, 2]
 
 
--- Tests warpSF using bouncingBall
-testWarpSF :: Assertion
-testWarpSF = do
-  let sf = warpSF 10 $ bouncingBall 0 1
+-- Tests rollbackMSF using bouncingBall
+testRollbackMSF :: Assertion
+testRollbackMSF = do
+  let sf = rollbackMSF 10 $ bouncingBall 0 1
       sfInput x = ((x, ()))
 
   -- Never warp, always select next continuation

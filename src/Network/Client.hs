@@ -164,7 +164,6 @@ sendJoinRequest s nick (ServerStateSendPort sp) = do
   joinRequest s request
   where request = JoinRequest nick (ServerStateSendPort sp)
 
--- TODO Signaturen so ändern, dass LocalClient übergeben wird!
 -- | Put a Command into a 'TMVar' 'q'. If 'q' is currently full, retries until TMVar is empty.
 writeCommand :: TMVar (CommandPacket cmd) -> CommandPacket cmd -> IO ()
 writeCommand q c = atomically $ putTMVar q c

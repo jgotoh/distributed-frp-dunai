@@ -1,11 +1,13 @@
--- | This module contains type definitions used by servers. TODO move all functions into Network.Server, and all remaining Type Definitions from Network.Server here
+-- | This module contains type definitions used by servers as well as some internal functions.
+
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FunctionalDependencies #-}
 
 module Network.Internal.ServerCommon
   ( ServerProcessDefinition
   , Client(..)
   , ServerState
-  , joinRequest
   , ServerConfiguration(..)
   , apiProcess
   , logTimeout
@@ -19,6 +21,8 @@ module Network.Internal.ServerCommon
   , addExternHandler
   , Node.LocalNode
   , Resolvable(..)
+  , LocalServer(..)
+  , HasState(..)
   )
 where
 
@@ -36,7 +40,48 @@ import qualified Control.Distributed.Process.Node
                                                as Node
 import qualified Control.Distributed.Process.ManagedProcess.Internal.Types
                                                as MP
+import           Control.Concurrent.STM
+import Control.Exception
 
+
+-- | A handler to a locally running server process. 'a' is the type of commands, 'b' is the type of exchanged state.
+data LocalServer a b = LocalServer {
+  -- | The main ProcessId of the server
+  pidServer :: P.ProcessId
+  -- | This TMVar is filled after the server has started, or after an error has occured.
+  -- Contains the Pid of the api process
+  , pidApiServer :: TMVar (Either SomeException P.ProcessId)
+  -- | Write in this Var to send a list of UpdatePackets to specified SendPorts.
+  , sendVar :: TMVar ([(P.SendPort (UpdatePacket b), UpdatePacket b)])
+  -- | Contains all 'CommandPackets' received via 'clientUpdate'
+  , readQueue :: TQueue (CommandPacket a)
+  -- | Contains the list of currently connected clients
+  , stateServer :: TVar (ServerState b)
+  }
+
+-- | Type of values that have an associated 'ServerState'
+class HasState a b | a -> b where
+  getState :: a -> IO (ServerState b)
+  getStateSTM :: a -> STM (ServerState b)
+
+instance HasState (LocalServer a b) b where
+  getState ser = readTVarIO $ stateServer ser
+  getStateSTM ser = readTVar $ stateServer ser
+
+instance Show (LocalServer a b) where
+  show (LocalServer pid _ _ _ _) = "LocalServer{ pid=" ++ show pid ++ "}"
+
+instance Addressable (LocalServer a b)
+
+instance Resolvable (LocalServer a b) where
+  resolve a = case a of
+    LocalServer pid _ _ _ _ -> return $ Just pid
+  unresolvableMessage a = "LocalServer could not be resolved: " ++ show a
+
+instance Routable (LocalServer a b) where
+  sendTo s m = resolve s >>= maybe (error $ unresolvableMessage s) (`P.send` m)
+  unsafeSendTo s m =
+    resolve s >>= maybe (error $ unresolvableMessage s) (`P.unsafeSend` m)
 -- | Alias for Cloud Haskell's 'ProcessDefinition', specialized to 'ServerState'
 type ServerProcessDefinition a = MP.ProcessDefinition (ServerState a)
 
@@ -82,14 +127,6 @@ instance Routable (Client a) where
 
 -- | State of a server is a list of connected clients
 type ServerState a = [Client a]
-
--- | Sends a 'JoinRequest' and returns the result using 'MP.call'
-joinRequest
-  :: (Addressable a, Binary m, Typeable m)
-  => a
-  -> JoinRequest m
-  -> P.Process (JoinRequestResult [Nickname])
-joinRequest = MP.call
 
 -- | Call to 'serve' using the supplied 'ServerProcessDefinition'. 's0' is an initial state, contained clients will be monitored immediately
 apiProcess

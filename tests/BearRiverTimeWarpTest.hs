@@ -52,7 +52,7 @@ data SFOut = SFOut Integer [TestMessage]
 
 -- Returns the current frameNr and its input concatenated with previous inputs to enable testing rollbacks
 concatSFWarp :: MSF IO (Natural, (Integer, [TestMessage])) (Integer, [SFOut])
-concatSFWarp = warpSF 3 $ concatSF
+concatSFWarp = rollbackMSF 3 $ concatSF
 
 concatSF :: Monad m => MSF m (Integer, [TestMessage]) (Integer, [SFOut])
 concatSF = count &&& concatInput
@@ -174,7 +174,7 @@ instance HasFrameAssociation Integer where
 
 idSFWarp
   :: Monad m => MSF m (Natural, (Char, [Integer])) (Integer, (Char, [Integer]))
-idSFWarp = warpSF 10 $ idSF
+idSFWarp = rollbackMSF 10 $ idSF
 
 -- sf that just returns the current frameNr/ number of iteration and its input
 idSF :: Monad m => MSF m (a, [msg]) (Integer, (a, [msg]))

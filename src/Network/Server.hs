@@ -1,7 +1,5 @@
 -- | This module exports all functions necessary to create a server application. Main function is 'startServerProcess'
 
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Network.Server
@@ -54,44 +52,13 @@ clientUpdate
   -> P.Process ()
 clientUpdate = MP.cast
 
--- | A handler to a locally running server process. 'a' is the type of commands, 'b' is the type of exchanged state.
-data LocalServer a b = LocalServer {
-  -- | The main ProcessId of the server
-  pidServer :: P.ProcessId
-  -- | This TMVar is filled after the server has started, or after an error has occured.
-  -- Contains the Pid of the api process
-  , pidApiServer :: TMVar (Either SomeException P.ProcessId)
-  -- | Write in this Var to send a list of UpdatePackets to specified SendPorts.
-  , sendVar :: TMVar ([(P.SendPort (UpdatePacket b), UpdatePacket b)])
-  -- | Contains all 'CommandPackets' received via 'clientUpdate'
-  , readQueue :: TQueue (CommandPacket a)
-  -- | Contains the list of currently connected clients
-  , stateServer :: TVar (ServerState b)
-  }
-
--- | Type of values that have an associated 'ServerState'
-class HasState a b | a -> b where
-  getState :: a -> IO (ServerState b)
-  getStateSTM :: a -> STM (ServerState b)
-
-instance HasState (LocalServer a b) b where
-  getState ser = readTVarIO $ stateServer ser
-  getStateSTM ser = readTVar $ stateServer ser
-
-instance Show (LocalServer a b) where
-  show (LocalServer pid _ _ _ _) = "LocalServer{ pid=" ++ show pid ++ "}"
-
-instance Addressable (LocalServer a b)
-
-instance Resolvable (LocalServer a b) where
-  resolve a = case a of
-    LocalServer pid _ _ _ _ -> return $ Just pid
-  unresolvableMessage a = "LocalServer could not be resolved: " ++ show a
-
-instance Routable (LocalServer a b) where
-  sendTo s m = resolve s >>= maybe (error $ unresolvableMessage s) (`P.send` m)
-  unsafeSendTo s m =
-    resolve s >>= maybe (error $ unresolvableMessage s) (`P.unsafeSend` m)
+-- | Sends a 'JoinRequest' and returns the result using 'MP.call'
+joinRequest
+  :: (Addressable a, Binary m, Typeable m)
+  => a
+  -> JoinRequest m
+  -> P.Process (JoinRequestResult [Nickname])
+joinRequest = MP.call
 
 -- | Default 'ServerConfiguration' that accepts every 'JoinRequest'.
 defaultServerConfig
