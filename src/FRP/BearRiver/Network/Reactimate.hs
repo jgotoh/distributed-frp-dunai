@@ -17,7 +17,7 @@ import           Control.Monad.Trans.MSF.Except
 import           Data.Functor.Identity
 import           Data.Maybe
 import           Data.MonadicStreamFunction.InternalCore
-import           FRP.BearRiver           hiding ( edgeJust )
+import           FRP.BearRiver
 
 -- | A variant of 'reactimate' for servers without any consistency maintenance mechanism.
 -- Is compared against Time Warp synchronisation in the thesis.
