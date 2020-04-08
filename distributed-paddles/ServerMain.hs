@@ -11,10 +11,7 @@ where
 import           Control.Concurrent
 import           Data.List
 import           Control.Monad.STM
-import           Control.Monad
--- import           Control.Applicative
 import           Control.Concurrent.STM.TMVar
-import           Control.Concurrent.STM.TQueue
 import qualified Data.Map.Strict               as Map
 import           Control.Monad.Trans.MSF.Reader
 import           FRP.BearRiver.TimeWarp
@@ -115,15 +112,15 @@ serverMain ip p n roundLength useTimeWarp = do
       (sense timeRef) -- get the DTime
       (actuate frameNrRef)
       (runGameReader (gameSettings roundLength) (serverSF pids))
-      (receiveState rQ) -- get CommandPackets
-      (writeState (createNetStates portA portB api) sQ) -- create UpdatePackets
+      (receiveCommand rQ) -- get CommandPackets
+      (\gs -> writeState sQ $ createNetStates portA portB api gs)
     else reactimateTimeWarp
       (return (GameInput Nothing))
       (sense timeRef)
       (actuate frameNrRef)
       (runGameReader (gameSettings roundLength) (serverSFWarp pids frames))
-      (receiveState' rQ)
-      (writeState (createNetStatesWithFrame portA portB api) sQ)
+      (receiveCommands rQ)
+      (\gs -> writeState sQ $ createNetStatesWithFrame portA portB api gs)
       frames
 
   dtTime <- senseTime startTime
@@ -137,7 +134,7 @@ serverMain ip p n roundLength useTimeWarp = do
   print "round over, server will quit"
   threadDelay 1000000
   SDL.quit
-  where frames = 30
+  where frames = 100
 
 actuate :: IORef Integer -> Bool -> GameState -> IO Bool
 actuate frameNrRef _ gs = do
@@ -146,26 +143,6 @@ actuate frameNrRef _ gs = do
   writeIORef frameNrRef $ previousFrame + 1
 
   return $ gameOver gs
-
--- only returns the first element.
-receiveState
-  :: Control.Concurrent.STM.TQueue.TQueue (CommandPacket Command)
-  -> IO [CommandPacket Command]
-receiveState =
-  (   next'
-  >=> (\c -> return $ case c of
-        Nothing  -> []
-        Just cmd -> [cmd]
-      )
-  )
-  where next' = atomically . tryReadTQueue
-
--- returns all pending commands
-receiveState'
-  :: Control.Concurrent.STM.TQueue.TQueue (CommandPacket Command)
-  -> IO [CommandPacket Command]
-receiveState' = next'
-  where next' = atomically . flushTQueue
 
 createNetStates
   :: P.SendPort (UpdatePacket NetState)
@@ -190,25 +167,6 @@ createNetStatesWithFrame !portA !portB server !(nr, gs) = (fmap . fmap)
   playerB = (portB, bState)
   aState  = NetState (localPlayerState gs) (remotePlayerState gs) (ballState gs) (gameOver gs)
   bState  = NetState (remotePlayerState gs) (localPlayerState gs) (ballState gs) (gameOver gs)
-
-writeState
-  :: (a -> [(P.SendPort (UpdatePacket NetState), UpdatePacket NetState)])
-  -> TMVar [(P.SendPort (UpdatePacket NetState), UpdatePacket NetState)]
-  -> a
-  -> IO ()
-writeState f q gs = do
-  let out = f gs
-  atomically . replaceTMVar q $ out
-
--- Empties a TMVar, then writes a new value
-replaceTMVar :: TMVar a -> a -> STM ()
-replaceTMVar v a = do
-  empty' <- isEmptyTMVar v
-  if empty'
-    then putTMVar v a
-    else do
-      _ <- takeTMVar v
-      putTMVar v a
 
 sense :: IORef DTime -> Bool -> IO (DTime, Maybe a)
 sense timeRef _ = do

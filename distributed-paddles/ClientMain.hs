@@ -1,5 +1,6 @@
 module ClientMain where
 
+import           Config
 import           Display
 import           GameState
 import           ClientGame
@@ -23,13 +24,10 @@ import qualified SDL
 import           System.Exit
 
 clientMain
-  :: HostName -> Port -> Nickname -> SessionName -> ServerAddress -> IO ()
-clientMain ip port nick session addr = do
-  (window, renderer) <- initializeSDL "distributed-paddles"
+  :: HostName -> Port -> Nickname -> SessionName -> ServerAddress -> Bool -> DRMConfig -> IO ()
+clientMain ip port nick session addr csp drm = do
+  (window, renderer) <- initializeSDL "Distributed Paddles"
   Right (node, _)    <- initializeNode ip port
-
-  -- test TCP connection
-  -- searchForServerEndPoint transport session addr
 
   Just  server       <- runProcessIO node (searchForServer session addr)
     >>= \s -> return $ join s
@@ -65,9 +63,9 @@ clientMain ip port nick session addr = do
   reactimateClient (return $ GameInput Nothing)
                    (sense timeRef)
                    (actuate frameNrRef renderer)
-                   (runGameReader gs remoteClientSF)
+                   (runGameReader gs (dynamicRemoteClientSF csp drm))
                    (receiveState rQ)
-                   (writeState getDir sQ pid)
+                   (writeCommand' getDir sQ pid)
 
   dtTime <- senseTime startTime
   frames <- readIORef frameNrRef
@@ -81,30 +79,25 @@ clientMain ip port nick session addr = do
 
 clientWindowTitle :: PlayerSettings -> PlayerSettings -> String
 clientWindowTitle localP remoteP = if x localP < x remoteP
-  then "distributed-paddles: Left"
-  else "distributed-paddles: Right"
+  then "Distributed Paddles: Left"
+  else "Distributed Paddles: Right"
  where
   x ps = case playerPosition0 ps of
     SDL.V2 x' _ -> x'
 
-receiveState
-  :: TMVar (UpdatePacket NetState) -> IO (Maybe (UpdatePacket NetState))
-receiveState = atomically . tryTakeTMVar
-
 getDir :: (DTime, GameInput) -> Maybe Command
 getDir = mkCommand . directionInput . snd where mkCommand = (Command <$>)
 
--- TODO as library function, so user only has to write f
-writeState
-  :: ((DTime, GameInput) -> Maybe Command)
-  -> TMVar (CommandPacket Command)
+writeCommand'
+  :: ((DTime, GameInput) -> Maybe cmd)
+  -> TMVar (CommandPacket cmd)
   -> P.ProcessId
   -> FrameNr
   -> (DTime, GameInput)
   -> IO ()
-writeState f q pid frame x = case f x of
+writeCommand' f q pid frame x = case f x of
   Nothing -> return ()
-  Just c  -> atomically . putTMVar q $ CommandPacket pid frame c
+  Just c  -> writeCommand q $ CommandPacket pid frame c
 
 runGameReader :: Monad m => GameSettings -> SF (GameEnv m) a b -> SF m a b
 runGameReader gs sf = readerS $ runReaderS_ (runReaderS sf) gs

@@ -3,11 +3,17 @@ module Config where
 import           Options.Applicative
 import           Data.Semigroup                 ( (<>) )
 
+data DRMConfig = DRMZero
+               | DRMFirst
+               deriving Show
+
 data Config = ClientConfig { ipConfig :: String
   , portConfig :: Int
   , nickConfig :: String
   , nameConfig :: String
-  , serverAddrConfig :: String }
+  , serverAddrConfig :: String
+  , useCSPConfig :: Bool
+  , drmConfig :: DRMConfig }
   | ServerConfig { ipConfig :: String
   , portConfig :: Int
   , nameConfig :: String
@@ -30,6 +36,8 @@ clientConfigParser =
           (long "s" <> help "EndpointAddress of Server to join" <> metavar
             "ADDRESS"
           )
+    <*> switch (long "csp" <> short 'c' <> help "whether to use client side prediction of the locally controlled paddle")
+    <*> flag DRMZero DRMFirst (long "drmFirst" <> short 'd' <> help "Enable first order dead reckoning")
 
 serverConfigParser :: Parser Config
 serverConfigParser =
