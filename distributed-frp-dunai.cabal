@@ -120,6 +120,7 @@ test-suite distributed-frp-dunai-tests
                        tasty-hunit
   other-modules:       BearRiverDRMTest,
                        BearRiverTimeWarpTest,
+                       ClientSidePredictionTest,
                        ClientTest,
                        ExtraTest,
                        ServerTest,

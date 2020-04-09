@@ -1,3 +1,4 @@
+import           ClientSidePredictionTest
 import           ClientTest
 import           ServerTest
 import           TimeWarpTest
@@ -15,5 +16,5 @@ main = do
   defaultMainWithIngredients [consoleTestReporter] tests
 
 tests :: TestTree
-tests = testGroup "All tests" [clientTests, serverTests, timeWarpTests, bearRiverTimeWarpTests, bearRiverExtraTests, bearRiverDRMTests]
+tests = testGroup "All tests" [clientTests, serverTests, timeWarpTests, bearRiverTimeWarpTests, bearRiverExtraTests, bearRiverDRMTests, clientSidePredictionTests]
 
