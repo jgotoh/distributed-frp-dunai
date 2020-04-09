@@ -1,4 +1,4 @@
--- import           ServerTest
+import           ServerTest
 import           TimeWarpTest
 import           BearRiverDRMTest
 import           BearRiverTimeWarpTest
@@ -13,7 +13,6 @@ main = do
   hSetBuffering stdout LineBuffering
   defaultMainWithIngredients [consoleTestReporter] tests
 
--- TODO add again serverTests when they are fixed.
 tests :: TestTree
-tests = testGroup "All tests" [timeWarpTests, bearRiverTimeWarpTests, bearRiverExtraTests, bearRiverDRMTests]
+tests = testGroup "All tests" [serverTests, timeWarpTests, bearRiverTimeWarpTests, bearRiverExtraTests, bearRiverDRMTests]
 

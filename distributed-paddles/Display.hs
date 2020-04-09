@@ -45,11 +45,8 @@ createRenderer window = do
         }
   SDL.createRenderer window (-1) rdrConfig
 
--- Rendering, TODO maybe use Reader SDL.Renderer
-
 drawBackground :: SDL.Renderer -> IO ()
 drawBackground renderer = do
-  -- SDL.rendererDrawColor renderer SDL.$= SDL.V4 100 149 237 255
   SDL.rendererDrawColor renderer SDL.$= SDL.V4 0 0 0 255
   SDL.clear renderer
 

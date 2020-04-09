@@ -21,7 +21,6 @@ module Network.Common
   , Binary
   , Generic
   , Typeable
-  , CommandRate
   , ServerStateChannel(..)
   , Port
   , ServerAddress
@@ -34,6 +33,7 @@ module Network.Common
   , updatePacketData
   , FrameNr
   , HasFrameAssociation(..)
+  , replaceTMVar
   )
 where
 
@@ -75,15 +75,12 @@ class HasFrameAssociation a where
   -- | returns its FrameNr
   getFrame :: a -> FrameNr
 
--- | The frequency clients are sending Commandpackets. TODO is unused, delete this
-type CommandRate = Time.TimeInterval
-
 -- | Channel used by the server to send UpdatePackets to clients
 data ServerStateChannel a = ServerStateChannel (ServerStateSendPort a) (ServerStateReceivePort a)
 
 -- | Port used by a server to send UpdatePackets to a client. Server -[state]-> Client
 newtype ServerStateSendPort a = ServerStateSendPort (P.SendPort (UpdatePacket a))
-  deriving (Generic, Show, Typeable, Eq)
+  deriving (Ord, Generic, Show, Typeable, Eq)
 instance Serializable a => Binary (ServerStateSendPort a)
 
 instance Addressable (ServerStateSendPort a)
@@ -209,3 +206,14 @@ runProcessIO node p = do
     result <- p
     P.liftIO $ atomically $ putTMVar v result
   atomically $ tryReadTMVar v
+
+-- | If the variable is empty, 'a' will be put into it. Otherwise the value will be replaced. Note that 'swapTMVar' works differently, as it first waits for the variable to be filled.
+replaceTMVar :: TMVar a -> a -> STM ()
+replaceTMVar v a = do
+  empty' <- isEmptyTMVar v
+  if empty'
+    then putTMVar v a
+    else do
+      _ <- takeTMVar v
+      putTMVar v a
+

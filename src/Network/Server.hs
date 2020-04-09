@@ -22,8 +22,8 @@ module Network.Server
   , receiveCommand
   , receiveCommands
   , writeState
-  , replaceTMVar
   )
+
 where
 import           Data.Binary                    ( Binary )
 import           Type.Reflection
@@ -109,17 +109,15 @@ startServerProcess cfg = do
 
       mainPid <- P.getSelfPid
 
-      -- TODO better way to modify ProcessDefinition?
+      -- There should be a better way to compose function that modify a processDefinition.
       let
         def =
           addApiHandler
               (MP.handleCall $ handleJoinRequest stateV $ joinConfig cfg)
             $ processDefinitionConfig cfg
-
       let
         def' =
           addInfoHandler (MP.handleInfo $ handleMonitorNotification stateV) def
-
       let def'' =
             addApiHandler (MP.handleCast $ handleCommandPacket rQueue) def'
 
@@ -127,7 +125,6 @@ startServerProcess cfg = do
 
       -- let server = LocalServer mainPid started sendVar rQueue stateV
 
-      -- TODO create/ destroy Updaters dynamically when clients join/ quit
       -- spawns processes that send individual StateUpdates
       updaters <- (fmap . fmap . fmap) fst spawnUpdateProcesses 2
 
@@ -165,9 +162,7 @@ startServerProcess cfg = do
 
 
 -- Sending of Updates --
-
 -- Process that periodically distributes messages read from v to UpdateProcesses.
--- TODO sense time and block for frequency - dt!
 sendStateProcessSTM
   :: (Binary b, Typeable b)
   => [TMVar (P.SendPort (UpdatePacket b), UpdatePacket b)] -- UpdateProcesses that send
@@ -175,16 +170,9 @@ sendStateProcessSTM
   -> Time.TimeInterval
   -> P.Process ()
 sendStateProcessSTM updaters v r = do
-  -- timeRef <- P.liftIO $ createTimeRef
   forever $ delay >> do
     msgs <- readV v
-    -- now  <- P.liftIO $ getCurrentTime
-    -- sendUpdate (csv1, csv2) msgs
     sendUpdates updaters msgs
-    -- then' <- P.liftIO $ getCurrentTime
-    -- P.liftIO $ print $ "send via sender took: " ++ show (diffUTCTime then' now)
-    -- dt <- P.liftIO $ senseTime timeRef
-    -- P.liftIO . print $ "Process send rate:" ++ show dt
     return ()
  where
   readV v' = P.liftIO . atomically $ takeTMVar v'
@@ -324,14 +312,4 @@ writeState
   -> IO ()
 writeState v xs = do
   atomically $ replaceTMVar v xs
-
--- | If the variable is empty, 'a' will be put into it. Otherwise the value will be replaced. Note that 'swapTMVar' works differently, as it first waits for the variable to be filled. TODO move to Network.Common
-replaceTMVar :: TMVar a -> a -> STM ()
-replaceTMVar v a = do
-  empty' <- isEmptyTMVar v
-  if empty'
-    then putTMVar v a
-    else do
-      _ <- takeTMVar v
-      putTMVar v a
 

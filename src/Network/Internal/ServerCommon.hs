@@ -108,7 +108,7 @@ data Client a = Client
     -- | 'SendPort' that is used to transmit an application's states
   , serverStateClient :: ServerStateSendPort a
   }
-  deriving (Generic, Typeable, Eq)
+  deriving (Ord, Generic, Typeable, Eq)
 
 instance Show (Client a) where
   show c = "Client " ++ nameClient c ++ "," ++ show (serverStateClient c)

@@ -10,6 +10,8 @@ import           Control.Concurrent
 import           Control.Concurrent.STM
 import           Control.Exception.Base         ( IOException )
 import           Control.Monad
+import Data.Set (Set)
+import qualified Data.Set as Set
 import           Network.Common
 import           Network.Server
 import qualified Network.Socket                as N
@@ -54,7 +56,6 @@ serverTests = withResource withNode clearNode tests
         return ()
       return nt
   clearNode (n, t) = do
-    print "closing node now"
     Node.closeLocalNode n >> T.closeTransport t
 
 tests :: IO (Node.LocalNode, T.Transport) -> TestTree
@@ -106,6 +107,7 @@ testClientUpdates (n, _) = withServer
     updates'' <- P.liftIO . atomically . flushTQueue $ readQueue server
     P.liftIO $ [update, update] @=? updates''
 
+-- Tests whether a server using the default configuration starts correctly.
 testDefaultServer :: (Node.LocalNode, T.Transport) -> Assertion
 testDefaultServer (n, _) = withServer
   (startServerProcess (testConfiguration n) :: IO
@@ -127,6 +129,7 @@ testDefaultServer (n, _) = withServer
     P.liftIO $ api @? "api process is not active"
 
 -- Tests handling of JoinRequests and monitoring of ServerStateSendPorts
+-- Tests whether setting a custom JoinRequestHandler works, afterwards connected clients quit to test whether a server's state is correctly updated.
 testJoinRequests :: (Node.LocalNode, T.Transport) -> Assertion
 testJoinRequests (n, _) = withServer
   (startServerProcess cfg :: IO (LocalServer TestMessage TestMessage))
@@ -135,6 +138,8 @@ testJoinRequests (n, _) = withServer
  where
   cfg :: ServerConfiguration TestMessage
   cfg = (testConfiguration n) { joinConfig = twoClients }
+
+  -- allow two clients to connect
   twoClients xs _ = return $ JoinRequestResult $ if length xs < 2
     then Right $ JoinAccepted $ nicks xs
     else Left $ JoinError errorMsg
@@ -163,6 +168,7 @@ testJoinRequests (n, _) = withServer
         join2 = JoinRequest nick2 ssp2
         join3 = JoinRequest nick3 ssp3
 
+    -- first two requests are accepted, third is rejected
     (JoinRequestResult (Right (JoinAccepted xs1))) <- joinRequest sPid join1
     (JoinRequestResult (Right (JoinAccepted xs2))) <- joinRequest sPid join2
     (JoinRequestResult (Left  (JoinError    err))) <- joinRequest sPid join3
@@ -171,15 +177,15 @@ testJoinRequests (n, _) = withServer
     P.liftIO $ xs2 @?= [nick1]
     P.liftIO $ err @?= errorMsg
 
-    -- test getState
-    state <- P.liftIO $ getState server
+    -- Check server's state
+    -- state should be compared for equality independently of its order due to concurrent creation
+    state <- P.liftIO $ getState server >>= return . Set.fromList
 
-    -- TODO expected list should be independent of order
     let expectedClient1 = Client nick1 ssp1
         expectedClient2 = Client nick2 ssp2
-        expectedState   = [expectedClient2, expectedClient1]
+        expectedSet = Set.fromList [expectedClient2, expectedClient1]
 
-    P.liftIO $ expectedState @=? state
+    P.liftIO $ expectedSet @=? state
 
     -- then remove clients, and test getState again
     P.kill sp1pid "removing client 1"
@@ -213,7 +219,6 @@ withServer
   -> Node.LocalNode
   -> Assertion
 withServer mkServer test n = do
-  -- TODO use bracket
   server    <- mkServer
   (Right _) <- atomically $ readTMVar (pidApiServer server)
   test server
@@ -224,19 +229,7 @@ withServer mkServer test n = do
       $  exitProc s "exiting server via withServer"
       >> P.unregister testSession
 
--- TODO test:
--- servers that run simulations themselves
--- test sending of stateUpdates (s -> c)
--- joining leaving simulations in progress
--- # test clientUpdates are written to rQueue
--- return initial state of world on join
--- # library users can decide whether clients can join
--- # servers need to be handle a varying amount of connected clients
--- clients do not need to determine the destination of messages (responsibility of servers)
--- users of the library need to be able to add new message types
--- # state Updates are generic, users of the library can decide what types of data should be transmitted and how network data is processed
--- servers need way to run simulations themselves
-
+-- Convenience function to create a node
 initializeNode
   :: N.HostName -> Port -> IO (Either IOException (Node.LocalNode, T.Transport))
 initializeNode ip port = do

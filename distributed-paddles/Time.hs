@@ -35,13 +35,8 @@ fixedTimeStep step timeRef = do
   -- see Jason Gregory, Game Engine Architecture, 2nd. Edition, p.351: Governing the Frame Rate
   if block < 0
     then do
-      -- let blockingTime =
-      -- print $ "last frame took: " ++ show dtSecs ++ "now blocking for: " ++ show block
-      -- threadDelay $ truncate $ millisToMicros step + fromIntegral block
-      -- TODO step + block as blocking time is wrong here
-      return ()
+      return () -- block until next frame is missing here
     else do
-      -- print $ "blocking " ++ show block ++ "frame took: " ++ show dtSecs
       threadDelay $ block
 
   -- new dtSecs after threadDelay
