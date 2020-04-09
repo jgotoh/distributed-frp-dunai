@@ -36,6 +36,7 @@ data LocalClient a b = LocalClient {
                      , sendVar :: TMVar (CommandPacket b)
                      }
 
+-- | A server a client can connect to
 newtype Server = Server P.ProcessId
   deriving Show
 
