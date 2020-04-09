@@ -36,8 +36,18 @@ clientConfigParser =
           (long "s" <> help "EndpointAddress of Server to join" <> metavar
             "ADDRESS"
           )
-    <*> switch (long "csp" <> short 'c' <> help "whether to use client side prediction of the locally controlled paddle")
-    <*> flag DRMZero DRMFirst (long "drmFirst" <> short 'd' <> help "Enable first order dead reckoning")
+    <*> switch
+          (  long "csp"
+          <> short 'c'
+          <> help
+               "whether to use client side prediction of the locally controlled paddle"
+          )
+    <*> flag
+          DRMZero
+          DRMFirst
+          (long "drmFirst" <> short 'd' <> help
+            "Enable first order dead reckoning"
+          )
 
 serverConfigParser :: Parser Config
 serverConfigParser =
@@ -45,7 +55,9 @@ serverConfigParser =
     <*> strOption (long "ip" <> help "IP of server" <> metavar "IP")
     <*> option auto (long "p" <> help "Port of server" <> metavar "PORT")
     <*> strOption (long "name" <> help "Name of session" <> metavar "NAME")
-    <*> option auto (long "d" <> help "Length of round in seconds" <> metavar "LENGTH")
+    <*> option
+          auto
+          (long "d" <> help "Length of round in seconds" <> metavar "LENGTH")
     <*> switch
           (long "timewarp" <> short 't' <> help
             "Whether to use time warp synchronisation"

@@ -116,9 +116,7 @@ toShapeBall (BallState p r _ _) =
   ToShape { broadphaseShape = Sphere p r, narrowphaseShape = Sphere p r }
 
 toShapePlayer :: PlayerState -> ToShape PlayerState
-toShapePlayer (PlayerState p b _ _) = ToShape
-  { broadphaseShape  = AABB p b
-  , narrowphaseShape = AABB p b
-  }
+toShapePlayer (PlayerState p b _ _) =
+  ToShape { broadphaseShape = AABB p b, narrowphaseShape = AABB p b }
 
 

@@ -1,13 +1,14 @@
 -- | Reactimate for clients, and a variant for servers that does not use time warp.
 
 module FRP.BearRiver.Network.Reactimate
-    ( reactimateServer
-    , reactimateClient
-    , HasFrameAssociation(..)
-    , FrameNr
-    , countAt
-    , frameNrSF
-    ) where
+  ( reactimateServer
+  , reactimateClient
+  , HasFrameAssociation(..)
+  , FrameNr
+  , countAt
+  , frameNrSF
+  )
+where
 
 
 import           Network.Common

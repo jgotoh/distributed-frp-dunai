@@ -74,7 +74,7 @@ testReceiveUpdates (n, _) = withServer
 
     -- write an UpdatePacket into LocalServer's sendVar
     let readVar' = readVar client
-        tm1 = UpdatePacket sPid 0 Pong
+        tm1      = UpdatePacket sPid 0 Pong
 
     -- get the SendPort of the Client
     [c] <- P.liftIO $ getState server
@@ -92,7 +92,7 @@ testReceiveUpdates (n, _) = withServer
     let tm2 = UpdatePacket sPid 3 Ping
     P.liftIO $ writeState (Network.Server.sendVar server) [(sp, tm2)]
 
-    _ <- P.liftIO $ threadDelay 1000000
+    _       <- P.liftIO $ threadDelay 1000000
     update2 <- P.liftIO . atomically $ readTMVar readVar'
 
     P.liftIO $ update2 @?= tm2
@@ -113,7 +113,7 @@ testSendCommands (n, _) = withServer
 
     -- write into sendVar
     let sendVar' = Network.Client.sendVar client
-        tm1 = CommandPacket (Network.Client.pidClient client) 0 Pong
+        tm1      = CommandPacket (Network.Client.pidClient client) 0 Pong
     P.liftIO . atomically $ putTMVar sendVar' tm1
 
     P.liftIO $ threadDelay 1000000
@@ -126,7 +126,7 @@ testSendCommands (n, _) = withServer
 -- tests whether joinRequests work. Start Server, then let 3 clients join.
 testJoinRequest :: (LocalNode, T.Transport) -> IO ()
 testJoinRequest (n, _) = withServer
-  (startServerProcess (testConfiguration n){joinConfig = twoClients} :: IO
+  (startServerProcess (testConfiguration n) { joinConfig = twoClients } :: IO
       (LocalServer TestMessage TestMessage)
   )
   test
@@ -138,14 +138,17 @@ testJoinRequest (n, _) = withServer
     else Left $ JoinError ""
   test server = Node.runProcess n $ do
 
-    (_, joinResultVar1) <- startTestClient n server "1"
-    (_, joinResultVar2) <- startTestClient n server "2"
-    (_, joinResultVar3) <- startTestClient n server "3"
+    (_, joinResultVar1)                          <- startTestClient n server "1"
+    (_, joinResultVar2)                          <- startTestClient n server "2"
+    (_, joinResultVar3)                          <- startTestClient n server "3"
 
     -- check joinResults
-    (JoinRequestResult (Right (JoinAccepted _))) <- P.liftIO . atomically $ takeTMVar joinResultVar1
-    (JoinRequestResult (Right (JoinAccepted _))) <- P.liftIO . atomically $ takeTMVar joinResultVar2
-    (JoinRequestResult (Left  (JoinError    _))) <- P.liftIO . atomically $ takeTMVar joinResultVar3
+    (JoinRequestResult (Right (JoinAccepted _))) <-
+      P.liftIO . atomically $ takeTMVar joinResultVar1
+    (JoinRequestResult (Right (JoinAccepted _))) <-
+      P.liftIO . atomically $ takeTMVar joinResultVar2
+    (JoinRequestResult (Left (JoinError _))) <-
+      P.liftIO . atomically $ takeTMVar joinResultVar3
 
     return ()
 
@@ -154,26 +157,28 @@ testTermination :: (LocalNode, T.Transport) -> IO ()
 testTermination (n, _) = Node.runProcess n $ do
 
     -- because we will terminate the server prematurely, we cannot use withServer here
-    let mkServer = startServerProcess (testConfiguration n) :: IO (LocalServer TestMessage TestMessage)
-    server <- P.liftIO $ mkServer
+  let mkServer =
+        startServerProcess (testConfiguration n) :: IO
+            (LocalServer TestMessage TestMessage)
+  server                  <- P.liftIO $ mkServer
 
-    (client, joinResultVar) <- startTestClient n server "1"
+  (client, joinResultVar) <- startTestClient n server "1"
 
-    joinResult <- P.liftIO . atomically $ takeTMVar joinResultVar
-    P.liftIO $ joinResult @?= (JoinRequestResult (Right (JoinAccepted [])))
+  joinResult              <- P.liftIO . atomically $ takeTMVar joinResultVar
+  P.liftIO $ joinResult @?= (JoinRequestResult (Right (JoinAccepted [])))
 
-    -- client process still exists
-    (Just _) <- P.getProcessInfo (Network.Client.pidClient client)
+  -- client process still exists
+  (Just  _        ) <- P.getProcessInfo (Network.Client.pidClient client)
 
-    -- kill server
-    (Right serverPid) <- P.liftIO . atomically . readTMVar $ pidApiServer server
-    P.kill serverPid "terminate is expected"
+  -- kill server
+  (Right serverPid) <- P.liftIO . atomically . readTMVar $ pidApiServer server
+  P.kill serverPid "terminate is expected"
 
-    -- client should terminate now, which means getProcessInfo will return Nothing
-    _ <- P.liftIO $ threadDelay 1000000
-    info <- P.getProcessInfo (Network.Client.pidClient client)
+  -- client should terminate now, which means getProcessInfo will return Nothing
+  _    <- P.liftIO $ threadDelay 1000000
+  info <- P.getProcessInfo (Network.Client.pidClient client)
 
-    P.liftIO $ info @?= Nothing
+  P.liftIO $ info @?= Nothing
 
 
 -- tests whether writeCommand correctly puts a command into a TMVar.
@@ -181,7 +186,7 @@ testWriteCommand :: (LocalNode, T.Transport) -> IO ()
 testWriteCommand (n, _) = Node.runProcess n $ do
 
   pid <- P.getSelfPid
-  v <- P.liftIO $ newEmptyTMVarIO
+  v   <- P.liftIO $ newEmptyTMVarIO
 
   let c1 = CommandPacket pid 1 "c"
 
@@ -196,9 +201,9 @@ testReceiveState :: (LocalNode, T.Transport) -> IO ()
 testReceiveState (n, _) = Node.runProcess n $ do
 
   pid <- P.getSelfPid
-  v <- P.liftIO $ newEmptyTMVarIO
+  v   <- P.liftIO $ newEmptyTMVarIO
 
-  s0 <- P.liftIO $ receiveState v
+  s0  <- P.liftIO $ receiveState v
 
   P.liftIO $ s0 @?= Nothing
 
@@ -213,24 +218,23 @@ testReceiveState (n, _) = Node.runProcess n $ do
   P.liftIO $ s1'' @?= Nothing
 
 -- Start a client, join a local server
-startTestClient :: LocalNode
-                         -> LocalServer TestMessage TestMessage
-                         -> String
-                         -> P.Process
-                              (LocalClient TestMessage TestMessage,
-                               TMVar (JoinRequestResult [Nickname]))
+startTestClient
+  :: LocalNode
+  -> LocalServer TestMessage TestMessage
+  -> String
+  -> P.Process
+       ( LocalClient TestMessage TestMessage
+       , TMVar (JoinRequestResult [Nickname])
+       )
 startTestClient n server nick = do
-    (Right sPid) <- P.liftIO . atomically . readTMVar $ pidApiServer server
+  (Right sPid) <- P.liftIO . atomically . readTMVar $ pidApiServer server
 
-    let remoteServer = Server sPid
-        createChan = (createServerStateChannel :: P.Process (ServerStateChannel TestMessage))
+  let remoteServer = Server sPid
+      createChan =
+        (createServerStateChannel :: P.Process (ServerStateChannel TestMessage))
 
-    P.liftIO $ startClientProcess
-        n
-        remoteServer
-        nick
-        createChan :: P.Process
-        ( LocalClient TestMessage TestMessage
-        , TMVar (JoinRequestResult [Nickname])
-        )
+  P.liftIO $ startClientProcess n remoteServer nick createChan :: P.Process
+      ( LocalClient TestMessage TestMessage
+      , TMVar (JoinRequestResult [Nickname])
+      )
 

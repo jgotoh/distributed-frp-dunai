@@ -61,10 +61,10 @@ startClientProcess
   -> P.Process (ServerStateChannel a)
   -> IO (LocalClient a b, TMVar (JoinRequestResult [Nickname]))
 startClientProcess node server nick sChanP = do
-  rVar <- newEmptyTMVarIO :: IO (TMVar (UpdatePacket a))
-  sVar <- newEmptyTMVarIO :: IO (TMVar (CommandPacket b))
-  joinResultVar   <- newEmptyTMVarIO
-  pid    <- Node.forkProcess node $ catch
+  rVar          <- newEmptyTMVarIO :: IO (TMVar (UpdatePacket a))
+  sVar          <- newEmptyTMVarIO :: IO (TMVar (CommandPacket b))
+  joinResultVar <- newEmptyTMVarIO
+  pid           <- Node.forkProcess node $ catch
     (do
 
       ServerStateChannel sp rp <- sChanP
@@ -98,9 +98,7 @@ clientProcess node server rp rVar sVar = do
     Server pid -> P.link pid
 
   inPid  <- P.liftIO $ Node.forkProcess node (receiveStateProcess rVar rp)
-  outPid <- P.liftIO $ Node.forkProcess
-    node
-    (sendCommandProcess sVar server)
+  outPid <- P.liftIO $ Node.forkProcess node (sendCommandProcess sVar server)
 
   P.link inPid
   P.link outPid
@@ -140,15 +138,11 @@ receiveStateProcess
   -> P.Process ()
 receiveStateProcess q p =
   forever $ P.receiveChan (serverStateReceivePort p) >>= writeQ
-  where
-    writeQ = P.liftIO . atomically . replaceTMVar q
+  where writeQ = P.liftIO . atomically . replaceTMVar q
 
 -- | Process to send CommandPackets to the server
 sendCommandProcess
-  :: (Binary a, Typeable a)
-  => TMVar (CommandPacket a)
-  -> Server
-  -> P.Process ()
+  :: (Binary a, Typeable a) => TMVar (CommandPacket a) -> Server -> P.Process ()
 sendCommandProcess q s = forever $ readQ q >>= sendState
  where
   readQ q' = P.liftIO . atomically $ takeTMVar q'

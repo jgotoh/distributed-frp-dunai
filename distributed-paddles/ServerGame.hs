@@ -48,9 +48,10 @@ serverSF pids = feedbackM act (loopingGame pids) >>> checkTime
   rps0 = toPlayerState . remotePlayerSettings
 
 checkTime :: Monad m => SF (GameEnv m) GameState GameState
-checkTime = arr id &&& check >>> arr (\(gs, q) -> gs{gameOver = q})
-  where
-    check = constM (lift $ asks maximumGameLength) &&& time >>> arr (uncurry (<=))
+checkTime = arr id &&& check >>> arr (\(gs, q) -> gs { gameOver = q })
+ where
+  check =
+    constM (lift $ asks maximumGameLength) &&& time >>> arr (uncurry (<=))
 
 serverSFWarp
   :: Monad m
@@ -60,7 +61,8 @@ serverSFWarp
        (GameEnv m)
        (Natural, (GameInput, [CommandPacket Command]))
        GameState
-serverSFWarp pids frames = rollbackMSF frames $ feedbackM act (loopingGame pids) >>> checkTime
+serverSFWarp pids frames =
+  rollbackMSF frames $ feedbackM act (loopingGame pids) >>> checkTime
  where
   act = do
     gs <- lift ask
@@ -127,18 +129,27 @@ paddleSF = proc dir -> do
   returnA -< PlayerState p b v c
 
 ballSF :: (Monad m) => SF (GameEnv m) GameState BallState
-ballSF =
-  switch ( arr id &&& (morphS (selectEnv ballSettings)
-          (resolveCollisions >>> feedbackM (lift $ asks ballDirection0) movingBallSF))
-          >>> arr snd &&& checkScore)
-    (\x -> morphS (mapReaderT (local $ newVelocity x)) ballSF)
+ballSF = switch
+  (   arr id
+  &&& (morphS
+        (selectEnv ballSettings)
+        (   resolveCollisions
+        >>> feedbackM (lift $ asks ballDirection0) movingBallSF
+        )
+      )
+  >>> arr snd
+  &&& checkScore
+  )
+  (\x -> morphS (mapReaderT (local $ newVelocity x)) ballSF)
 
 newVelocity :: (ObjectType, Direction) -> GameSettings -> GameSettings
-newVelocity x gs = gs{ballSettings=bs{ballDirection0=dir', ballVelocityMax=vel'}}
-  where
-    bs = ballSettings gs
-    dir' = snd x
-    vel' = (ballVelocityMax bs) * 1.01
+newVelocity x gs = gs
+  { ballSettings = bs { ballDirection0 = dir', ballVelocityMax = vel' }
+  }
+ where
+  bs   = ballSettings gs
+  dir' = snd x
+  vel' = (ballVelocityMax bs) * 1.01
 
 movingBallSF
   :: Monad m
@@ -154,28 +165,43 @@ movingBallSF = proc (cs, dir) -> do
   ps (BallSettings p b v c _) = PlayerSettings p (V2 b b) v c
 
 -- checks if a player scored. Event contains the scored player and an updated direction for the ball after reset.
-checkScore :: Monad m => SF (GameEnv m) (GameState, BallState ) (Event (ObjectType, Direction))
+checkScore
+  :: Monad m
+  => SF (GameEnv m) (GameState, BallState) (Event (ObjectType, Direction))
 checkScore = proc (gs,bs) -> do
-  localX <- constM (lift $ asks $ playerX localPlayerSettings) -< ()
+  localX  <- constM (lift $ asks $ playerX localPlayerSettings) -< ()
   remoteX <- constM (lift $ asks $ playerX remotePlayerSettings) -< ()
-  ballX <- arr ((\p -> case p of V2 x _ -> x) . ballPositionState) -< bs
+  ballX   <-
+    arr
+        ( (\p -> case p of
+            V2 x _ -> x
+          )
+        . ballPositionState
+        )
+      -< bs
   ev <- arr check -< (ballX, localX, remoteX)
   returnA -< newDir gs <$> ev
-  where
-    playerX player = (\p -> case p of V2 x _ -> x) . playerPosition0 . player
-    check (ballX,localX,remoteX) = if | ballX < localX -> Event RemotePlayer
-                                      | ballX > remoteX -> Event LocalPlayer
-                                      | otherwise -> NoEvent
+ where
+  playerX player =
+    (\p -> case p of
+        V2 x _ -> x
+      )
+      . playerPosition0
+      . player
+  check (ballX, localX, remoteX) = if
+    | ballX < localX  -> Event RemotePlayer
+    | ballX > remoteX -> Event LocalPlayer
+    | otherwise       -> NoEvent
 
 newDir :: GameState -> ObjectType -> (ObjectType, Direction)
 newDir gs o = (o, dir')
-  where
-    dir' = normalize $ a - b
-    (a,b) = case o of
-      RemotePlayer -> (remotePos, localPos)
-      LocalPlayer -> (localPos, remotePos)
-    localPos = playerPositionState $ localPlayerState gs
-    remotePos = playerPositionState $ remotePlayerState gs
+ where
+  dir'   = normalize $ a - b
+  (a, b) = case o of
+    RemotePlayer -> (remotePos, localPos)
+    LocalPlayer  -> (localPos, remotePos)
+  localPos  = playerPositionState $ localPlayerState gs
+  remotePos = playerPositionState $ remotePlayerState gs
 
 moveSF :: Monad m => SF (PlayerEnv m) (Maybe Direction) (Position, Velocity)
 moveSF = proc dir -> do

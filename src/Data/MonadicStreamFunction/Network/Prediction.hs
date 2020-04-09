@@ -10,17 +10,23 @@ module Data.MonadicStreamFunction.Network.Prediction
   )
 where
 
-import           Data.MonadicStreamFunction hiding (trace)
+import           Data.MonadicStreamFunction
+                                         hiding ( trace )
 import           Data.MonadicStreamFunction.Extra
 import           Data.VectorSpace
 import           Control.Monad.Trans.MSF.Except
 
 -- | Client Side Prediction, either returns a 'b' if input signal 'Maybe b' is defined, or uses 'MSF m a b' if it is not defined. Switches into a new simulating sf 'MSF m a b', if input signal is defined.
-predict :: Monad m
+predict
+  :: Monad m
   => MSF m a b -- ^ initial simulating sf
   -> (b -> MSF m a b) -- ^ get new updated simulating sf on defined values
   -> MSF m (a, Maybe b) b
-predict sf sfC = switch (simulate sf) (\b -> second (replaceOnce' Nothing) >>> replaceOnceOut b (predict (sfC b) sfC))
+predict sf sfC = switch
+  (simulate sf)
+  (\b ->
+    second (replaceOnce' Nothing) >>> replaceOnceOut b (predict (sfC b) sfC)
+  )
 
 simulate :: Monad m => MSF m a b -> MSF m (a, Maybe b) (b, Maybe b)
 simulate sf = first sf
@@ -35,20 +41,22 @@ drm
   -> (b -> v) -- ^ position vector
   -> (b -> v -> b) -- ^ contruct new value from extrapolated position
   -> MSF m (Maybe b) b
-drm integrate b0 vel pos new =
-  switch
-    (extrapolateSF integrate b0 vel pos new)
-    (\b0' -> replaceOnce' Nothing >>> replaceOnceOut b0' (drm integrate b0' vel pos new))
+drm integrate b0 vel pos new = switch
+  (extrapolateSF integrate b0 vel pos new)
+  (\b0' -> replaceOnce' Nothing
+    >>> replaceOnceOut b0' (drm integrate b0' vel pos new)
+  )
   -- first input needs to be replaced by Nothing, otherwise infinite loop
   -- then ensure that new Just values are not extrapolated immediately by first returning b0', then switch into extrapolating arrow
 
-extrapolateSF :: (VectorSpace v a, Monad m)
-             => MSF m v v
-             -> b
-             -> (b -> v)
-             -> (b -> v)
-             -> (b -> v -> b)
-             -> MSF m (Maybe b) (b, Maybe b)
+extrapolateSF
+  :: (VectorSpace v a, Monad m)
+  => MSF m v v
+  -> b
+  -> (b -> v)
+  -> (b -> v)
+  -> (b -> v -> b)
+  -> MSF m (Maybe b) (b, Maybe b)
 extrapolateSF int b0 vel pos new = proc mb -> do
   b' <- extrapolate vel pos new int -< b0
   returnA -< (b', mb)

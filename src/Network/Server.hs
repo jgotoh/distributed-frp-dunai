@@ -23,7 +23,6 @@ module Network.Server
   , receiveCommands
   , writeState
   )
-
 where
 import           Data.Binary                    ( Binary )
 import           Type.Reflection
@@ -98,11 +97,11 @@ startServerProcess
   => ServerConfiguration b
   -> IO (LocalServer a b)
 startServerProcess cfg = do
-  started <- newEmptyTMVarIO
+  started  <- newEmptyTMVarIO
   sendVar' <- newEmptyTMVarIO
-  rQueue  <- newTQueueIO
-  stateV  <- newTVarIO state0
-  pid     <- Node.forkProcess node $ catch
+  rQueue   <- newTQueueIO
+  stateV   <- newTVarIO state0
+  pid      <- Node.forkProcess node $ catch
     (do
       P.liftIO $ print "process forked"
       let serverAddress = P.nodeAddress $ Node.localNodeId node
@@ -121,7 +120,7 @@ startServerProcess cfg = do
       let def'' =
             addApiHandler (MP.handleCast $ handleCommandPacket rQueue) def'
 
-      pid <- P.spawnLocal $ apiProcess def'' state0
+      pid      <- P.spawnLocal $ apiProcess def'' state0
 
       -- let server = LocalServer mainPid started sendVar rQueue stateV
 
@@ -284,9 +283,7 @@ handleMonitorNotification v s (P.PortMonitorNotification ref port reason) = do
   where s' = withoutClient' port s
 
 -- | Remove and return the first element of a 'TQueue'.
-receiveCommand
-  :: TQueue a
-  -> IO [a]
+receiveCommand :: TQueue a -> IO [a]
 receiveCommand =
   (   next'
   >=> (\c -> return $ case c of
@@ -297,11 +294,8 @@ receiveCommand =
   where next' = atomically . tryReadTQueue
 
 -- | Returns all elements of a 'TQueue'. The Queue is empty afterwards.
-receiveCommands
-  :: Control.Concurrent.STM.TQueue.TQueue a
-  -> IO [a]
-receiveCommands = next'
-  where next' = atomically . flushTQueue
+receiveCommands :: Control.Concurrent.STM.TQueue.TQueue a -> IO [a]
+receiveCommands = next' where next' = atomically . flushTQueue
 
 -- | Write a list of UpdatePackets which should be sent to a specific 'SendPort' into a 'TMVar', which is usually the 'sendVar' of a 'LocalServer'.
 -- If the 'TMVar' already contains a value, it will be replaced.

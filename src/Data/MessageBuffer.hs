@@ -3,25 +3,31 @@
 {-# LANGUAGE OverloadedLists, TypeFamilies #-}
 
 module Data.MessageBuffer
-    ( MessageBuffer(..)
-    , toMessageBuffer
-    , firstMessage
-    , insertMessage
-    , takeWhile
-    , span
-    , singleton
-    , dropWhile
-    , fromList
-    , take
-    , takeTail
-    , size
-    ) where
+  ( MessageBuffer(..)
+  , toMessageBuffer
+  , firstMessage
+  , insertMessage
+  , takeWhile
+  , span
+  , singleton
+  , dropWhile
+  , fromList
+  , take
+  , takeTail
+  , size
+  )
+where
 
-import Prelude hiding (takeWhile, take, span, dropWhile, tail)
-import qualified Data.SortedList as SL
-import Data.Semigroup
-import Numeric.Natural
-import GHC.Exts
+import           Prelude                 hiding ( takeWhile
+                                                , take
+                                                , span
+                                                , dropWhile
+                                                , tail
+                                                )
+import qualified Data.SortedList               as SL
+import           Data.Semigroup
+import           Numeric.Natural
+import           GHC.Exts
 
 -- | A sorted list of messages.
 data MessageBuffer a = MessageBuffer (SL.SortedList a)
@@ -36,7 +42,7 @@ instance Ord a => Semigroup (MessageBuffer a) where
   (<>) (MessageBuffer xs) (MessageBuffer ys) = MessageBuffer $ xs <> ys
 
 instance Ord a => Monoid (MessageBuffer a) where
-  mempty = MessageBuffer $ fromList []
+  mempty  = MessageBuffer $ fromList []
   mappend = (<>)
 
 -- | List to 'MessageBuffer'.
@@ -53,11 +59,13 @@ takeWhile p (MessageBuffer xs) = MessageBuffer $ SL.takeWhile p xs
 
 -- | See 'SL.span'
 span :: (a -> Bool) -> MessageBuffer a -> (MessageBuffer a, MessageBuffer a)
-span p (MessageBuffer xs) = let (xs',ys) = SL.span p xs in (MessageBuffer xs', MessageBuffer ys)
+span p (MessageBuffer xs) =
+  let (xs', ys) = SL.span p xs in (MessageBuffer xs', MessageBuffer ys)
 
 -- | Safely returns a buffer's head.
 firstMessage :: MessageBuffer a -> Maybe a
-firstMessage (MessageBuffer xs) = if null xs then Nothing else Just . Prelude.head $ SL.fromSortedList xs
+firstMessage (MessageBuffer xs) =
+  if null xs then Nothing else Just . Prelude.head $ SL.fromSortedList xs
 
 -- | Singleton buffer.
 singleton :: a -> MessageBuffer a
@@ -76,7 +84,8 @@ size :: Ord a => MessageBuffer a -> Int
 size (MessageBuffer xs) = length $ toList xs
 
 -- | Returns the last 'n' elements.
-takeTail ::  Natural -> MessageBuffer a -> MessageBuffer a
-takeTail n (MessageBuffer xs) = MessageBuffer $ (SL.reverseDown . SL.take (fromIntegral n) . SL.reverse) xs
+takeTail :: Natural -> MessageBuffer a -> MessageBuffer a
+takeTail n (MessageBuffer xs) =
+  MessageBuffer $ (SL.reverseDown . SL.take (fromIntegral n) . SL.reverse) xs
 
 

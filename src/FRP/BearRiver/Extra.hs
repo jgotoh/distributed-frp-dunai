@@ -2,8 +2,7 @@
 
 {-# LANGUAGE RankNTypes #-}
 module FRP.BearRiver.Extra
-  (
-  embedSF
+  ( embedSF
   )
 where
 

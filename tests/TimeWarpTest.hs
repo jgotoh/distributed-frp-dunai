@@ -23,10 +23,10 @@ timeWarpTests = tests
 tests :: TestTree
 tests = testGroup
   "TimeWarpTests"
-  [ testCase "embed bouncingBall"        testBouncingBall
+  [ testCase "embed bouncingBall"             testBouncingBall
   , testCase "embed toRollbackMSF"            testToRollbackMSF
-  , testCase "test consCap"              testConsCap
-  , testCase "test selectSF"             testSelectSF
+  , testCase "test consCap"                   testConsCap
+  , testCase "test selectSF"                  testSelectSF
   , testCase "embed rollbackMSF bouncingBall" testRollbackMSF
   , testCase "embed rollbackMSF count"        testRollbackMSFCount
   ]

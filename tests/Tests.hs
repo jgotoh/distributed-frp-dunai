@@ -16,5 +16,14 @@ main = do
   defaultMainWithIngredients [consoleTestReporter] tests
 
 tests :: TestTree
-tests = testGroup "All tests" [clientTests, serverTests, timeWarpTests, bearRiverTimeWarpTests, bearRiverExtraTests, bearRiverDRMTests, clientSidePredictionTests]
+tests = testGroup
+  "All tests"
+  [ clientTests
+  , serverTests
+  , timeWarpTests
+  , bearRiverTimeWarpTests
+  , bearRiverExtraTests
+  , bearRiverDRMTests
+  , clientSidePredictionTests
+  ]
 

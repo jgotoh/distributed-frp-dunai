@@ -44,7 +44,8 @@ instance Binary GSRequest
 
 -- handler to be added to a server's ProcessDefinition
 handleGSRequest :: MP.CallHandler (ServerState a) GSRequest (Maybe GameSettings)
-handleGSRequest s (GSRequest pid) = MP.reply (gsClient s (gameSettings 0) pid) s
+handleGSRequest s (GSRequest pid) =
+  MP.reply (gsClient s (gameSettings 0) pid) s
 
 -- return the GameState for a specific client
 gsClient :: ServerState a -> GameSettings -> P.ProcessId -> Maybe GameSettings
@@ -69,7 +70,7 @@ getConfiguration node ip port name = defaultServerConfig node ip port name def
     addApiHandler (MP.handleCall handleGSRequest) defaultFRPProcessDefinition
 
 gameSettings :: Int -> GameSettings
-gameSettings roundLength = GameSettings psA psB bs (fromIntegral roundLength )
+gameSettings roundLength = GameSettings psA psB bs (fromIntegral roundLength)
  where
   psA = PlayerSettings (SDL.V2 50 100) (SDL.V2 10 50) (SDL.V2 0 225) white
   psB = PlayerSettings (SDL.V2 450 100) (SDL.V2 10 50) (SDL.V2 0 225) white
@@ -102,9 +103,9 @@ serverMain ip p n roundLength useTimeWarp = do
 
   -- FPS:
   frameNrRef <- newIORef 0
-  startTime <- createTimeRef
+  startTime  <- createTimeRef
 
-  timeRef <- createTimeRef
+  timeRef    <- createTimeRef
   if not useTimeWarp
     then
     -- reactimate, gather inputs of clients, send UpdatePackets (= snapshots of whole world)
@@ -124,11 +125,11 @@ serverMain ip p n roundLength useTimeWarp = do
       (\gs -> writeState sQ $ createNetStatesWithFrame portA portB api gs)
       frames
 
-  dtTime <- senseTime startTime
+  dtTime         <- senseTime startTime
   numberOfFrames <- readIORef frameNrRef
 
   let dtMs = dtTime
-      fps = (fromIntegral numberOfFrames) / dtMs
+      fps  = (fromIntegral numberOfFrames) / dtMs
 
   print $ "FPS: " ++ show fps
 
@@ -166,8 +167,14 @@ createNetStatesWithFrame !portA !portB server !(nr, gs) = (fmap . fmap)
  where
   playerA = (portA, aState)
   playerB = (portB, bState)
-  aState  = NetState (localPlayerState gs) (remotePlayerState gs) (ballState gs) (gameOver gs)
-  bState  = NetState (remotePlayerState gs) (localPlayerState gs) (ballState gs) (gameOver gs)
+  aState  = NetState (localPlayerState gs)
+                     (remotePlayerState gs)
+                     (ballState gs)
+                     (gameOver gs)
+  bState = NetState (remotePlayerState gs)
+                    (localPlayerState gs)
+                    (ballState gs)
+                    (gameOver gs)
 
 sense :: IORef DTime -> Bool -> IO (DTime, Maybe a)
 sense timeRef _ = do

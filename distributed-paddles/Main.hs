@@ -18,5 +18,6 @@ main = do
   case cfg of
     ClientConfig ip port nick name server csp drm ->
       clientMain ip port nick name server csp drm
-    ServerConfig ip port name roundLength useTW -> serverMain ip port name roundLength useTW
-    GameConfig                -> undefined
+    ServerConfig ip port name roundLength useTW ->
+      serverMain ip port name roundLength useTW
+    GameConfig -> undefined

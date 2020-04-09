@@ -1,11 +1,12 @@
 {-# OPTIONS_GHC -fno-warn-type-defaults #-}
 
 module ExtraTest
-    ( bearRiverExtraTests
-    ) where
+  ( bearRiverExtraTests
+  )
+where
 
-import FRP.BearRiver
-import FRP.BearRiver.Network.Reactimate
+import           FRP.BearRiver
+import           FRP.BearRiver.Network.Reactimate
 import           Test.Tasty
 import           Test.Tasty.HUnit
 
@@ -15,7 +16,7 @@ bearRiverExtraTests = tests
 tests :: TestTree
 tests = testGroup
   "BearRiverExtraTests"
-  [ testCase "test whether countAt x starts at x" testCountAt
+  [ testCase "test whether countAt x starts at x"             testCountAt
   , testCase "test whether FrameNr incrementation is updated" testFrameNrSF
   ]
 
@@ -48,14 +49,14 @@ testFrameNrSF = do
 
   print "rs1"
   rs1 <- embed (frameNrSF 2) [just 10, Nothing, Nothing]
-  rs1 @?= [10, 11 ,12]
+  rs1 @?= [10, 11, 12]
 
   print "rs2"
   rs2 <- embed (frameNrSF 1) [Nothing, just 10, Nothing]
-  rs2 @?= [1, 10 ,11]
+  rs2 @?= [1, 10, 11]
 
   rs3 <- embed (frameNrSF 3) [Nothing, Nothing, just 10]
-  rs3 @?= [3, 4 ,10]
+  rs3 @?= [3, 4, 10]
 
   rs4 <- embed (frameNrSF 0) [just 10, just 100, just 1000]
   rs4 @?= [10, 100, 1000]

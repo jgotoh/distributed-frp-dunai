@@ -19,9 +19,7 @@ bearRiverDRMTests = tests
 tests :: TestTree
 tests = testGroup
   "BearRiverDRMTests"
-  [
-    testCase "test drmZero" testDRMZero
-  , testCase "test drmFirst" testDRMFirst]
+  [testCase "test drmZero" testDRMZero, testCase "test drmFirst" testDRMFirst]
 
 type Position = Vector2 Double
 type Velocity = Vector2 Double
@@ -160,11 +158,11 @@ testDRMFirst = do
   -- e.g when extrapolating A with velocity > 0
   -- then extrapolating A with velocity = 0, should yield the same position
 
-  let rAv0 pos = a0 { posA = pos, velA = v2 0 0}
+  let rAv0 pos = a0 { posA = pos, velA = v2 0 0 }
   let in9 =
-        [ dt 1 (Just (rA (v2 20 20)))
-        , dt 4 Nothing
-        , dt 1 (Just (rAv0 (v2 100 100)))
+        [ dt 1  (Just (rA (v2 20 20)))
+        , dt 4  Nothing
+        , dt 1  (Just (rAv0 (v2 100 100)))
         , dt 10 Nothing
         ]
   rs9 <- test in9

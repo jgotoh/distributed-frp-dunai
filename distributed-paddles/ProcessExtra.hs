@@ -1,11 +1,11 @@
 module ProcessExtra
-    (
-    initializeNode
-    ) where
+  ( initializeNode
+  )
+where
 
 import qualified Network.Socket                as N
-import Network.Common
-import Network.Transport.TCP as NT
+import           Network.Common
+import           Network.Transport.TCP         as NT
 import qualified Control.Distributed.Process.Node
                                                as Node
 import           Control.Exception.Base         ( IOException )

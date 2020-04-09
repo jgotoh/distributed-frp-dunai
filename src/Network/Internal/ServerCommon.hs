@@ -41,7 +41,7 @@ import qualified Control.Distributed.Process.Node
 import qualified Control.Distributed.Process.ManagedProcess.Internal.Types
                                                as MP
 import           Control.Concurrent.STM
-import Control.Exception
+import           Control.Exception
 
 
 -- | A handler to a locally running server process. 'a' is the type of commands, 'b' is the type of exchanged state.

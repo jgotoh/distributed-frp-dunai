@@ -25,7 +25,14 @@ import qualified SDL
 import           System.Exit
 
 clientMain
-  :: HostName -> Port -> Nickname -> SessionName -> ServerAddress -> Bool -> DRMConfig -> IO ()
+  :: HostName
+  -> Port
+  -> Nickname
+  -> SessionName
+  -> ServerAddress
+  -> Bool
+  -> DRMConfig
+  -> IO ()
 clientMain ip port nick session addr csp drm = do
   (window, renderer) <- initializeSDL "Distributed Paddles"
   Right (node, _)    <- initializeNode ip port
@@ -58,9 +65,9 @@ clientMain ip port nick session addr csp drm = do
 
   -- FPS:
   frameNrRef <- newIORef 0
-  startTime <- createTimeRef
+  startTime  <- createTimeRef
 
-  timeRef   <- createTimeRef
+  timeRef    <- createTimeRef
   reactimateClient (return $ GameInput Nothing)
                    (sense timeRef)
                    (actuate frameNrRef renderer)
@@ -72,7 +79,7 @@ clientMain ip port nick session addr csp drm = do
   frames <- readIORef frameNrRef
 
   let dtMs = dtTime
-      fps = (fromIntegral frames ) / dtMs
+      fps  = (fromIntegral frames) / dtMs
 
   print $ "FPS: " ++ show fps
 
@@ -114,7 +121,7 @@ actuate frameNrRef renderer _ state = do
 
 sense :: IORef DTime -> Bool -> IO (DTime, Maybe GameInput)
 sense timeRef _ = do
-  _ <- fixedTimeStep 33.333 timeRef
+  _      <- fixedTimeStep 33.333 timeRef
   events <- SDL.pollEvents
   when (quitEvent events) exitSuccess
   dir <- direction
@@ -169,5 +176,6 @@ drawPlayer r ps = drawRect r
                            (playerColorState ps)
 
 drawBall :: SDL.Renderer -> BallState -> IO ()
-drawBall r bs = drawCircle r (ballPositionState bs) (ballRadiusState bs) (ballColorState bs)
+drawBall r bs =
+  drawCircle r (ballPositionState bs) (ballRadiusState bs) (ballColorState bs)
 
