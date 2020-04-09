@@ -1,5 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# OPTIONS_GHC -fno-warn-type-defaults #-}
 
 module ServerTest
   ( serverTests
@@ -10,7 +11,6 @@ import           Control.Concurrent
 import           Control.Concurrent.STM
 import           Control.Exception.Base         ( IOException )
 import           Control.Monad
-import Data.Set (Set)
 import qualified Data.Set as Set
 import           Network.Common
 import           Network.Server
@@ -61,12 +61,15 @@ serverTests = withResource withNode clearNode tests
 tests :: IO (Node.LocalNode, T.Transport) -> TestTree
 tests mkNT = testGroup
   "ServerTests"
-  [ testCase "testing default configuration" $ mkNT >>= testDefaultServer
-  , testCase "testing join requests" $ mkNT >>= testJoinRequests
-  , testCase "testing clientUpdate" $ mkNT >>= testClientUpdates
+  [ testCase "startup using default configuration" $ mkNT >>= testDefaultServer
+  , testCase "join requests and termination" $ mkNT >>= testJoinRequests
+  , testCase "receiving client updates" $ mkNT >>= testClientUpdates
+  , testCase "sending of states" $ mkNT >>= testSendState
+  , testCase "write UpdatePackets with writeState" $ mkNT >>= testWriteState
+  , testCase "read Commands with receiveCommands" $ mkNT >>= testReceiveCommands
   ]
 
--- Tests whether CommandPackets sent by clientUpdate are correctly added to the receivingQueue of a server
+-- Tests whether CommandPackets sent by clientUpdate are correctly added to the readQueue of a server
 testClientUpdates :: (Node.LocalNode, T.Transport) -> Assertion
 testClientUpdates (n, _) = withServer
   (startServerProcess (testConfiguration n) :: IO
@@ -80,6 +83,7 @@ testClientUpdates (n, _) = withServer
 
     (Right sPid)   <- P.liftIO . atomically . readTMVar $ pidApiServer server
 
+    -- testProcess contains a typed channel which basically mocks a client
     (sp1v, sp1pid) <- P.liftIO $ testProcess n
     sp1            <- P.liftIO . atomically $ readTMVar sp1v
 
@@ -94,7 +98,7 @@ testClientUpdates (n, _) = withServer
     updates <- P.liftIO . atomically . flushTQueue $ readQueue server
     P.liftIO $ [] @=? updates
 
-    -- Connect and send again
+    -- Connect/ join, then send again
     _ <- joinRequest sPid join1
     clientUpdate sPid update
     P.liftIO $ threadDelay 1000000
@@ -106,6 +110,55 @@ testClientUpdates (n, _) = withServer
     P.liftIO $ threadDelay 1000000
     updates'' <- P.liftIO . atomically . flushTQueue $ readQueue server
     P.liftIO $ [update, update] @=? updates''
+
+-- Test whether writing into the sendVar of a Server actually sends data.
+testSendState :: (Node.LocalNode, T.Transport) -> Assertion
+testSendState (n, _) = withServer
+  (startServerProcess (testConfiguration n) :: IO
+      (LocalServer TestMessage TestMessage)
+  )
+  test
+  n
+ where
+  test server = Node.runProcess n $ do
+
+    (Right sPid)   <- P.liftIO . atomically . readTMVar $ pidApiServer server
+
+    -- create a channel which will receive states from the server
+    (sp1, rp1) <-
+      P.newChan :: P.Process (P.SendPort TestUpdate, P.ReceivePort TestUpdate)
+    (sp2, rp2) <-
+      P.newChan :: P.Process (P.SendPort TestUpdate, P.ReceivePort TestUpdate)
+    P.linkPort sp1
+    P.linkPort sp2
+
+    let sendVar' = (sendVar server)
+
+    let tm1 = UpdatePacket sPid 0 Ping
+    -- write a message to sendVar
+    writeV sendVar' [(sp1, tm1)]
+
+    -- test: rp1 has tm1, sendVar is empty
+    tm1' <- P.receiveChan rp1
+    P.liftIO $ tm1' @?= tm1
+    isNull <- P.liftIO . atomically $ isEmptyTMVar sendVar'
+    P.liftIO $ assertBool "sendVar should be empty" isNull
+
+    -- write multiple messages
+    let tm2 = UpdatePacket sPid 1 Pong
+    let tm3 = UpdatePacket sPid 2 Pong
+    writeV sendVar' [(sp1, tm2), (sp2, tm3)]
+
+    tm2' <- P.receiveChan rp1
+    tm3' <- P.receiveChan rp2
+    P.liftIO $ tm2' @?= tm2
+    P.liftIO $ tm3' @?= tm3
+    isNull' <- P.liftIO . atomically $ isEmptyTMVar sendVar'
+    P.liftIO $ assertBool "sendVar should be empty" isNull'
+
+
+writeV :: TMVar [(P.SendPort TestUpdate, TestUpdate)] -> [(P.SendPort TestUpdate, TestUpdate)] -> P.Process ()
+writeV var v = P.liftIO $ atomically $ putTMVar var v
 
 -- Tests whether a server using the default configuration starts correctly.
 testDefaultServer :: (Node.LocalNode, T.Transport) -> Assertion
@@ -240,3 +293,51 @@ initializeNode ip port = do
     Right r -> do
       n <- createLocalNode r
       return $ Right (n, r)
+
+testWriteState :: (Node.LocalNode, T.Transport) -> Assertion
+testWriteState (node, _ ) = Node.runProcess node $ do
+  var <- P.liftIO $ newEmptyTMVarIO
+
+  (sp, _) <-
+    P.newChan :: P.Process (P.SendPort (UpdatePacket Int), P.ReceivePort (UpdatePacket Int))
+  pid <- P.getSelfPid
+
+  -- writeState actually writes
+  let up x = UpdatePacket pid 10 x
+      x1 = (sp, up 1)
+      x2 = (sp, up 2)
+  P.liftIO $ writeState var [x1, x2]
+
+  results <- P.liftIO . atomically $ readTMVar var
+  P.liftIO $ results @?= [x1, x2]
+
+  -- writeState replaces an existing value
+  let x3 = (sp, up 3)
+      x4 = (sp, up 4)
+  P.liftIO $ writeState var [x3, x4]
+
+  results' <- P.liftIO . atomically $ readTMVar var
+  P.liftIO $ results' @?= [x3, x4]
+
+testReceiveCommands :: (Node.LocalNode, T.Transport) -> Assertion
+testReceiveCommands (node, _ ) = Node.runProcess node $ do
+  q <- P.liftIO $ newTQueueIO
+
+  let x1 = 1
+      x2 = 2
+
+  P.liftIO . atomically $ writeTQueue q x1
+
+  rs1 <- P.liftIO $ receiveCommands q
+  P.liftIO $ rs1 @?= [x1]
+  isNull <- P.liftIO . atomically $ isEmptyTQueue q
+  P.liftIO $ assertBool "queue should be empty" isNull
+
+  P.liftIO . atomically $ writeTQueue q x1
+  P.liftIO . atomically $ writeTQueue q x2
+
+  rs2 <- P.liftIO $ receiveCommands q
+  P.liftIO $ rs2 @?= [x1, x2]
+  isNull' <- P.liftIO . atomically $ isEmptyTQueue q
+  P.liftIO $ assertBool "queue should be empty" isNull'
+
