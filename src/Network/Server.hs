@@ -149,10 +149,9 @@ startServerProcess cfg = do
       P.liftIO $ forever $ threadDelay 16
     )
     (\e -> do
-      P.liftIO $ print "internal server error"
+      P.liftIO $ print $ "internal server error:" ++ show (e :: SomeException)
       _ <- P.liftIO $ atomically $ tryPutTMVar started
                                                (Left (e :: SomeException))
-      P.liftIO $ print $ show (e :: SomeException)
       throwM e
     )
   return $ LocalServer pid started sendVar' rQueue stateV

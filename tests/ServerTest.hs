@@ -4,6 +4,10 @@
 
 module ServerTest
   ( serverTests
+  , initializeNode
+  , TestMessage(..)
+  , withServer
+  , testConfiguration
   )
 where
 
@@ -11,7 +15,7 @@ import           Control.Concurrent
 import           Control.Concurrent.STM
 import           Control.Exception.Base         ( IOException )
 import           Control.Monad
-import qualified Data.Set as Set
+import qualified Data.Set                      as Set
 import           Network.Common
 import           Network.Server
 import qualified Network.Socket                as N
@@ -122,10 +126,10 @@ testSendState (n, _) = withServer
  where
   test server = Node.runProcess n $ do
 
-    (Right sPid)   <- P.liftIO . atomically . readTMVar $ pidApiServer server
+    (Right sPid) <- P.liftIO . atomically . readTMVar $ pidApiServer server
 
     -- create a channel which will receive states from the server
-    (sp1, rp1) <-
+    (sp1, rp1)   <-
       P.newChan :: P.Process (P.SendPort TestUpdate, P.ReceivePort TestUpdate)
     (sp2, rp2) <-
       P.newChan :: P.Process (P.SendPort TestUpdate, P.ReceivePort TestUpdate)
@@ -134,7 +138,7 @@ testSendState (n, _) = withServer
 
     let sendVar' = (sendVar server)
 
-    let tm1 = UpdatePacket sPid 0 Ping
+    let tm1      = UpdatePacket sPid 0 Ping
     -- write a message to sendVar
     writeV sendVar' [(sp1, tm1)]
 
@@ -157,7 +161,10 @@ testSendState (n, _) = withServer
     P.liftIO $ assertBool "sendVar should be empty" isNull'
 
 
-writeV :: TMVar [(P.SendPort TestUpdate, TestUpdate)] -> [(P.SendPort TestUpdate, TestUpdate)] -> P.Process ()
+writeV
+  :: TMVar [(P.SendPort TestUpdate, TestUpdate)]
+  -> [(P.SendPort TestUpdate, TestUpdate)]
+  -> P.Process ()
 writeV var v = P.liftIO $ atomically $ putTMVar var v
 
 -- Tests whether a server using the default configuration starts correctly.
@@ -236,7 +243,7 @@ testJoinRequests (n, _) = withServer
 
     let expectedClient1 = Client nick1 ssp1
         expectedClient2 = Client nick2 ssp2
-        expectedSet = Set.fromList [expectedClient2, expectedClient1]
+        expectedSet     = Set.fromList [expectedClient2, expectedClient1]
 
     P.liftIO $ expectedSet @=? state
 
@@ -295,11 +302,12 @@ initializeNode ip port = do
       return $ Right (n, r)
 
 testWriteState :: (Node.LocalNode, T.Transport) -> Assertion
-testWriteState (node, _ ) = Node.runProcess node $ do
-  var <- P.liftIO $ newEmptyTMVarIO
+testWriteState (node, _) = Node.runProcess node $ do
+  var     <- P.liftIO $ newEmptyTMVarIO
 
   (sp, _) <-
-    P.newChan :: P.Process (P.SendPort (UpdatePacket Int), P.ReceivePort (UpdatePacket Int))
+    P.newChan :: P.Process
+      (P.SendPort (UpdatePacket Int), P.ReceivePort (UpdatePacket Int))
   pid <- P.getSelfPid
 
   -- writeState actually writes
@@ -320,7 +328,7 @@ testWriteState (node, _ ) = Node.runProcess node $ do
   P.liftIO $ results' @?= [x3, x4]
 
 testReceiveCommands :: (Node.LocalNode, T.Transport) -> Assertion
-testReceiveCommands (node, _ ) = Node.runProcess node $ do
+testReceiveCommands (node, _) = Node.runProcess node $ do
   q <- P.liftIO $ newTQueueIO
 
   let x1 = 1

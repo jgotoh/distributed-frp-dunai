@@ -9,6 +9,7 @@ module Network.Client
   , LocalClient(..)
   , writeCommand
   , receiveState
+  , Server(..)
   )
 where
 
