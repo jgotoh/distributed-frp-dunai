@@ -4,7 +4,7 @@ trap "trap - SIGTERM && kill -- -$BASHPID" SIGINT SIGTERM EXIT
 
 # run Server
 echo "Starting the server"
-cabal new-run distributed-paddles -- --host --ip 127.0.0.1 --p 3000 --name name --d 30 | sed "s/^/[Server] /" &
+cabal new-run distributed-paddles -- --host --ip 127.0.0.1 --p 3000 --name name --d 30 -t | sed "s/^/[Server] /" &
 
 # run Clients
 
@@ -23,7 +23,7 @@ do
     PORT=$((3000+$i))
     echo "Starting client $i on port $PORT"
 
-    cabal new-run distributed-paddles -- --ip 127.0.0.1 --p $PORT --name name --s 127.0.0.1:3000:0 --nick $i | sed "s/^/[Client$i] /" &
+    cabal new-run distributed-paddles -- --ip 127.0.0.1 --p $PORT --name name --s 127.0.0.1:3000:0 --nick $i -c -d | sed "s/^/[Client$i] /" &
 done
 
 read -n 1 -s -r -p $'Press any key to exit\n'

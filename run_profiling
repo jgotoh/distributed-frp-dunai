@@ -1,5 +1,4 @@
 #!/bin/bash
-# TODO cabal build before anything here 
 
 # Convenience script to execute distributed paddles with a server and two hosts using profiling.
 # Press any key to start the clients after the server has started.
@@ -13,6 +12,8 @@
 # Profiling in Haskell does not support specifying output files.
 # Running a profiled program called x always writes its output to x.hp.
 # The workaround used here is to execute different copies of the executable.
+
+cabal new-build
 
 PATH_EXE=dist-newstyle/build/x86_64-linux/ghc-8.2.2/distributed-frp-dunai-0.1.0.0/x/distributed-paddles/build/distributed-paddles/
 

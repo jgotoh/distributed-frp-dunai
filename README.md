@@ -1,8 +1,23 @@
 # Distributed Systems Extensions for the Dunai FRP Library
 
-This library provides a Client/ Server infrastructure by using [Cloud Haskell](https://haskell-distributed.github.io/) for distributed FRP applications implemented with [Dunai/ BearRiver](https://github.com/ivanperez-keera/dunai).
+This library provides a client/ server infrastructure by using [Cloud Haskell](https://haskell-distributed.github.io/) for distributed FRP applications implemented with [Dunai/ BearRiver](https://github.com/ivanperez-keera/dunai).
 
-Will also support synchronisation techniques sometime in the future.
+Modules of the client/server architecture:
+
+- `Network.Server` exports functions necessary to create a server application. Servers generate state (which will be sent to clients) and are the central authority of an application in this project. They process commands received by clients.
+
+- `Network.Client` exports functions to create a client application. Clients display states and generate commands from user input, which will be sent to a server.
+
+- `Network.Common` contains types and functions used by both servers and clients
+
+There is also support for several mechanisms to synchronise the state between running instances of an application:
+
+- Time Warp Synchronisation is supported for Servers, for a version of reactimate which uses time warp, see module `FRP.BearRiver.Network.TimeWarp`. A reactimate version for clients in this context is in module `FRP.BearRiver.Network.Reactimate`.
+
+- Dead Reckoning and Client Side Prediction is supported for Clients, see modules `Data.MonadicStreamFunction.Prediction` and `FRP.BearRiver.Network.Prediction`
+
+Documentation of the project via Haddock is provided in directory `doc`.
+For example usage of the modules, see `distributed-paddles` and the unit tests.
 
 ## distributed-paddles
 
@@ -10,21 +25,43 @@ Will also support synchronisation techniques sometime in the future.
 
 The application needs [SDL2](https://www.libsdl.org/download-2.0.php) and [SDL2-gfx](http://www.ferzkopp.net/wordpress/2016/01/02/sdl_gfx-sdl2_gfx/) installed on the system.
 
-A session can be created or joined:
+Command line arguments are used to decide whether to host a session as a
+server or join a session as a client. In addition, command line arguments should
+be used to decide which consistency maintenance mechanisms to use.
 
-To create a session called `name` on localhost, port `3000`:
+Command line arguments for servers:
+- `--host` flag to initiate server startup
+- `--ip IP` on which IP to host the server (e.g localhost)
+- `--p PORT` port of server
+- `--name NAME` name of the session hosted
+- `--d LENGTH` length of the playable round in seconds
+- `--t` flag to turn on time warp synchronisation
 
-`cabal new-run distributed-paddles -- --host --ip 127.0.0.1 --p 3000 --name name`
+To create a session called `name` on localhost, port `3000`, maximum length of the game 30 seconds, using time warp, use:
 
-To join with a nickname `A`, receiving messages on port `3001`:
+`cabal new-run distributed-paddles -- --host --ip 127.0.0.1 --p 3000 --name name --d 30 --t`
 
-`cabal new-run distributed-paddles -- --ip 127.0.0.1 --p 3001 --name name --s 127.0.0.1:3000:0 --nick A`
+When the server started correctly, it will print something like this: `Server starts at: 127.0.0.1:3000:0 ... `.
+`127.0.0.1:3000:0` is the address of the server which has to be used by clients to connect.
+
+Command line arguments for clients:
+- `--ip IP` on which ip to start the server
+- `--p PORT` port of client
+- `--nick NICK` name of client
+- `--name NAME` name of session to join
+- `--s ADDRESS` address of the server, in this format: `IP:PORT:0`, see above
+- `--csp` turn on client side prediction (default is off)
+- `--drmFirst` turn on dead reckoning (default is off)
+
+To join with a nickname `A`, receiving messages on port `3001`, using client side prediction and dead reckoning:
+
+`cabal new-run distributed-paddles -- --ip 127.0.0.1 --p 3001 --name name --s 127.0.0.1:3000:0 --nick A --csp --drmFirst`
 
 Paddles can be moved up and down by pressing arrow keys.
 
 ### Simple startup
 
-To run a server with `n` hosts that join, run `run_test n`, e.g `run_test 2`. 
+To run a server with `n` hosts that join, run `run_paddles n`, e.g `run_paddles 2`. 
 
 Running with argument 0 only starts up a server.
 
@@ -37,23 +74,6 @@ To exit the session, press again any key.
 To automatically run a server with two hosts that join using profiling, run `run_profiling`.
 
 See comments in the file to actually get it to run.
-
-## hlint
-
-This project uses `hlint` to statically check for code improvements.
-
-For more information see:
-https://github.com/ndmitchell/hlint
-
-## ghcid
-
-Running `ghcid` then automatically checks source files for errors on changes.
-`ghcid` can be modified in file `.ghcid`.
-
-To modify GHCi startup used by ghcid, modify `.ghci`
-
-For more information see:
-https://github.com/ndmitchell/ghcid
 
 ## Formatting
 
