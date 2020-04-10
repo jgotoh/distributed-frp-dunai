@@ -19,7 +19,6 @@ data Config = ClientConfig { ipConfig :: String
   , nameConfig :: String
   , lengthConfig :: Int
   , useTimeWarpConfig :: Bool}
-  | GameConfig
   deriving (Show)
 
 clientConfigParser :: Parser Config
@@ -63,13 +62,8 @@ serverConfigParser =
             "Whether to use time warp synchronisation"
           )
 
-gameConfigParser :: Parser Config
-gameConfigParser = flag'
-  GameConfig
-  (long "game" <> help "start the simulation without any networking features")
-
 configParser :: Parser Config
-configParser = gameConfigParser <|> clientConfigParser <|> serverConfigParser
+configParser = clientConfigParser <|> serverConfigParser
 
 configInfo :: InfoMod Config
 configInfo =

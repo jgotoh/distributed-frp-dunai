@@ -20,4 +20,4 @@ main = do
       clientMain ip port nick name server csp drm
     ServerConfig ip port name roundLength useTW ->
       serverMain ip port name roundLength useTW
-    GameConfig -> undefined
+
