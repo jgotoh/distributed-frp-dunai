@@ -41,7 +41,7 @@ newA :: A -> Position -> A
 newA a pos = a { posA = pos }
 
 v2 :: RealFloat a => a -> a -> Vector2 a
-v2 x y = vector2 x y
+v2 = vector2
 
 dt :: DTime -> Maybe a -> (DTime, Maybe a)
 dt = (,)

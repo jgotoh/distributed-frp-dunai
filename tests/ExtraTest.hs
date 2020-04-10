@@ -44,7 +44,7 @@ testFrameNrSF = do
 
   -- frameNrSF :: (HasFrameAssociation netin, Monad m) => FrameNr -> MSF m (Maybe netin) FrameNr
   print "rs0"
-  rs0 <- embed (frameNrSF 0) [(Nothing :: Maybe TestMessage), Nothing, Nothing]
+  rs0 <- embed (frameNrSF 0) [Nothing :: Maybe TestMessage, Nothing, Nothing]
   rs0 @?= [0, 1, 2]
 
   print "rs1"

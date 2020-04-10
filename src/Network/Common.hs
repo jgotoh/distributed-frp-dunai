@@ -1,5 +1,6 @@
 -- | This module contains types and functions used by both servers and clients.
 
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE MonoLocalBinds #-}
 
@@ -161,7 +162,7 @@ serverStateReceivePort rp = case rp of
 
 -- | Convenience function that uses 'resolve' to get the 'P.ProcessId' of a 'Node.LocalNode', running in IO
 resolveIO :: Resolvable a => Node.LocalNode -> a -> IO (Maybe P.ProcessId)
-resolveIO n a = runProcessIO n (resolve a) >>= \mmx -> case mmx of
+resolveIO n a = runProcessIO n (resolve a) >>= \case
   Nothing -> return Nothing
   Just mx -> return mx
 

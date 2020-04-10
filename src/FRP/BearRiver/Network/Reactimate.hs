@@ -1,5 +1,7 @@
 -- | Reactimate for clients, and a variant for servers that does not use time warp.
 
+{-# LANGUAGE TupleSections #-}
+
 module FRP.BearRiver.Network.Reactimate
   ( reactimateServer
   , reactimateClient
@@ -35,11 +37,11 @@ reactimateServer
   -> m ()
 reactimateServer senseI sense actuate sf netin netout = do
   MSF.reactimateB
-    $   (senseSF senseI sense &&& (arrM $ \() -> netin))
+    $   (senseSF senseI sense &&& arrM (\() -> netin))
     >>> arr reorder
     >>> sfIO sf
-    >>> (actuateSF actuate)
-    &&& (withSideEffect netout)
+    >>> actuateSF actuate
+    &&& withSideEffect netout
     >>> arr fst
   return ()
 
@@ -55,12 +57,12 @@ reactimateClient
   -> m ()
 reactimateClient senseI sense actuate sf netin netout = do
   MSF.reactimateB
-    $   (senseSF senseI sense &&& (arrM $ \() -> netin))
+    $   (senseSF senseI sense &&& arrM (\() -> netin))
     >>> arr reorder
     >>> sfIO sf
     &&& sendCommand netout
     >>> arr fst
-    >>> (actuateSF actuate)
+    >>> actuateSF actuate
   return ()
 
 -- | Get the current FrameNr. Starts at 'x0', increments with each iteration.
@@ -76,11 +78,11 @@ countAndUpdate
   :: (HasFrameAssociation netin, Monad m)
   => FrameNr
   -> MSF m (Maybe netin) (FrameNr, Event FrameNr)
-countAndUpdate x0 = countAt x0 &&& arr ((fmap getFrame) . maybeToEvent)
+countAndUpdate x0 = countAt x0 &&& arr (fmap getFrame . maybeToEvent)
 
 -- | Start counting at 'x0'. Will return 'x0' on first application.
 countAt :: (Monad m, Num n) => n -> MSF m a n
-countAt x0 = count >>> iPre 0 >>> arr ((+) x0)
+countAt x0 = count >>> iPre 0 >>> arr (x0 +)
 
 -- Sense functions
 
@@ -104,7 +106,7 @@ senseSF
 senseSF senseI sense = switch' (senseFirst senseI) (senseRest sense)
 
 senseFirst :: (Monad m, Num a1) => m b -> MSF m a2 ((a1, b), Event b)
-senseFirst senseI = constM senseI >>> (arr $ \x -> ((0, x), Event x))
+senseFirst senseI = constM senseI >>> arr (\x -> ((0, x), Event x))
 
 senseRest :: Monad m => (Bool -> m (c, Maybe c')) -> c' -> MSF m a (c, c')
 senseRest sense a = constM (sense True) >>> (arr id *** keepLast a)
@@ -114,10 +116,10 @@ keepLast a = MSF $ \ma -> let a' = fromMaybe a ma in return (a', keepLast a')
 
 -- Consume/render
 actuateSF :: Monad m => (Bool -> a -> m c) -> MSF m a c
-actuateSF actuate = arr (\x -> (True, x)) >>> arrM (uncurry actuate)
+actuateSF actuate = arr (True, ) >>> arrM (uncurry actuate)
 
 switch' :: Monad m => MSF m a (b, Event c) -> (c -> MSF m a b) -> MSF m a b
-switch' sf' sfC = MSF.switch (sf' >>> second (arr eventToMaybe)) sfC
+switch' sf' = MSF.switch (sf' >>> second (arr eventToMaybe))
 
 -- Taken from https://hackage.haskell.org/package/bearriver-0.13.1.1/docs/src/FRP.BearRiver.html#dSwitch with type generalized to any MSF
 dSwitch' :: Monad m => MSF m a (b, Event c) -> (c -> MSF m a b) -> MSF m a b
@@ -125,7 +127,7 @@ dSwitch' sf sfC = MSF $ \a -> do
   (o, ct) <- unMSF sf a
   case o of
     (b, Event c) -> do
-      (_, ct') <- (unMSF (sfC c) a)
+      (_, ct') <- unMSF (sfC c) a
       return (b, ct')
     (b, NoEvent) -> return (b, dSwitch' ct sfC)
 

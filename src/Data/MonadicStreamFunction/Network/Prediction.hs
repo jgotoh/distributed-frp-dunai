@@ -29,7 +29,7 @@ predict sf sfC = switch
   )
 
 simulate :: Monad m => MSF m a b -> MSF m (a, Maybe b) (b, Maybe b)
-simulate sf = first sf
+simulate = first
 
 -- | Generic Dead Reckoning, extrapolate last defined values of type 'b'.
 -- values of type b need a velocity, position. Positions are extrapolated, so the function needs a way to construct new values from updated positions. Integration is done by MSF m v v.

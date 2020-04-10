@@ -48,7 +48,7 @@ testConsCap = do
 
 testSelectSF :: Assertion
 testSelectSF = do
-  (sf0, [sf0']) <- selectSF 0 (arr $ \() -> 10) [(arr $ \() -> 11)]
+  (sf0, [sf0']) <- selectSF 0 (arr $ \() -> 10) [arr $ \() -> 11]
   (x0 , _     ) <- unMSF sf0 ()
   x0 @?= (10 :: Integer)
 
@@ -58,22 +58,20 @@ testSelectSF = do
   assertThrows $ selectSF 1 (arr $ \() -> 10 :: Integer) []
 
   -- selects (arr $ \() -> 11)
-  (sf1, []) <- selectSF 1 (arr $ \() -> 10) [(arr $ \() -> 11)]
+  (sf1, []) <- selectSF 1 (arr $ \() -> 10) [arr $ \() -> 11]
   (x1 , _ ) <- unMSF sf1 ()
   x1 @?= (11 :: Integer)
 
   -- selects (arr $ \() -> 12), rest of the list is thrown away
-  (sf2, []) <- selectSF 2
-                        (arr $ \() -> 10)
-                        [(arr $ \() -> 11), (arr $ \() -> 12)]
-  (x2, _) <- unMSF sf2 ()
+  (sf2, []) <- selectSF 2 (arr $ \() -> 10) [arr $ \() -> 11, arr $ \() -> 12]
+  (x2 , _ ) <- unMSF sf2 ()
   x2 @?= (12 :: Integer)
 
   -- selects (arr $ \() -> 12)
   (sf3, [sf3']) <- selectSF
     2
     (arr $ \() -> 10)
-    [(arr $ \() -> 11), (arr $ \() -> 12), (arr $ \() -> 13)]
+    [arr $ \() -> 11, arr $ \() -> 12, arr $ \() -> 13]
   (x3, _) <- unMSF sf3 ()
   x3 @?= (12 :: Integer)
   (x3', _) <- unMSF sf3' ()
@@ -103,24 +101,24 @@ testToRollbackMSF = do
   fst <$> rs2 @?= [1, 2, 3, 3, 2, 1, 1, 2, 3, 3]
 
   -- warp, return 10
-  rs3 <- embed sf $ [sfInput 1 [arr $ \() -> 10]]
+  rs3 <- embed sf [sfInput 1 [arr $ \() -> 10]]
   fst <$> rs3 @?= [10]
 
   -- warp, return 11
-  rs4 <- embed sf $ [sfInput 2 [arr $ \() -> 10, arr $ \() -> 11]]
+  rs4 <- embed sf [sfInput 2 [arr $ \() -> 10, arr $ \() -> 11]]
   fst <$> rs4 @?= [11]
 
   -- apply normally twice, then warp and return 10
-  rs5 <- embed sf $ [sfInput 0 [], sfInput 0 [], sfInput 1 [arr $ \() -> 10]]
+  rs5 <- embed sf [sfInput 0 [], sfInput 0 [], sfInput 1 [arr $ \() -> 10]]
   fst <$> rs5 @?= [1, 2, 10]
 
-  assertThrows (embed sf $ [sfInput 1 []])
+  assertThrows (embed sf [sfInput 1 []])
 
 -- Tests rollbackMSF using count SF
 testRollbackMSFCount :: Assertion
 testRollbackMSFCount = do
-  let sf = rollbackMSF 10 $ count :: MSF IO (Natural, ()) Integer
-      sfInput x = ((x, ()))
+  let sf = rollbackMSF 10 count :: MSF IO (Natural, ()) Integer
+      sfInput x = (x, ())
 
   rs0 <- embed sf $ replicate 5 $ sfInput 0
   rs0 @?= [1 .. 5]
@@ -143,7 +141,7 @@ testRollbackMSFCount = do
 testRollbackMSF :: Assertion
 testRollbackMSF = do
   let sf = rollbackMSF 10 $ bouncingBall 0 1
-      sfInput x = ((x, ()))
+      sfInput x = (x, ())
 
   -- Never warp, always select next continuation
   -- Should yield the same values as bouncingBall

@@ -167,11 +167,10 @@ sendStateProcessSTM
   -> TMVar [(P.SendPort (UpdatePacket b), UpdatePacket b)] -- Updates to send
   -> Time.TimeInterval
   -> P.Process ()
-sendStateProcessSTM updaters v r = do
-  forever $ delay >> do
-    msgs <- readV v
-    sendUpdates updaters msgs
-    return ()
+sendStateProcessSTM updaters v r = forever $ delay >> do
+  msgs <- readV v
+  sendUpdates updaters msgs
+  return ()
  where
   readV v' = P.liftIO . atomically $ takeTMVar v'
   delay = P.liftIO $ threadDelay (Time.asTimeout r)
@@ -193,14 +192,13 @@ spawnUpdateProcesses
   :: (Binary b, Typeable b)
   => Integer
   -> P.Process [(TMVar (P.SendPort b, b), P.ProcessId)]
-spawnUpdateProcesses n = forM [1 .. n] (\_ -> spawnUpdateProcess)
+spawnUpdateProcesses n = forM [1 .. n] (const spawnUpdateProcess)
 
 -- | Spawn a process that sends messages on a typed channel. Messages to send are transmitted via the returned TMVar. Process can be quit via the returned ProcessId.
 spawnUpdateProcess
-  :: (Binary b, Typeable b)
-  => P.Process (TMVar (P.SendPort (b), b), P.ProcessId)
+  :: (Binary b, Typeable b) => P.Process (TMVar (P.SendPort b, b), P.ProcessId)
 spawnUpdateProcess = do
-  v   <- P.liftIO $ newEmptyTMVarIO
+  v   <- P.liftIO newEmptyTMVarIO
   pid <- P.spawnLocal $ updateProcess v
   return (v, pid)
 
@@ -219,7 +217,7 @@ waitUntilState
   :: (HasState s a) => s -> (ServerState a -> Bool) -> IO (ServerState a)
 waitUntilState hs f = atomically $ do
   s <- getStateSTM hs
-  when (not $ f s) retry
+  unless (f s) retry
   return s
 
 
@@ -285,12 +283,11 @@ handleMonitorNotification v s (P.PortMonitorNotification ref port reason) = do
 -- | Remove and return the first element of a 'TQueue'.
 receiveCommand :: TQueue a -> IO [a]
 receiveCommand =
-  (   next'
-  >=> (\c -> return $ case c of
-        Nothing  -> []
-        Just cmd -> [cmd]
-      )
-  )
+  next'
+    >=> (\c -> return $ case c of
+          Nothing  -> []
+          Just cmd -> [cmd]
+        )
   where next' = atomically . tryReadTQueue
 
 -- | Returns all elements of a 'TQueue'. The Queue is empty afterwards.
@@ -303,6 +300,5 @@ writeState
   :: TMVar [(P.SendPort (UpdatePacket b), UpdatePacket b)]
   -> [(P.SendPort (UpdatePacket b), UpdatePacket b)]
   -> IO ()
-writeState v xs = do
-  atomically $ replaceTMVar v xs
+writeState v xs = atomically $ replaceTMVar v xs
 

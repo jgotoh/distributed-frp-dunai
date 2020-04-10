@@ -52,7 +52,7 @@ data LocalServer a b = LocalServer {
   -- Contains the Pid of the api process
   , pidApiServer :: TMVar (Either SomeException P.ProcessId)
   -- | Write in this Var to send a list of UpdatePackets to specified SendPorts.
-  , sendVar :: TMVar ([(P.SendPort (UpdatePacket b), UpdatePacket b)])
+  , sendVar :: TMVar [(P.SendPort (UpdatePacket b), UpdatePacket b)]
   -- | Contains all 'CommandPackets' received via 'clientUpdate'
   , readQueue :: TQueue (CommandPacket a)
   -- | Contains the list of currently connected clients

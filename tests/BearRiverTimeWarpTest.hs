@@ -44,7 +44,7 @@ data TestMessage = TM FrameNr Char
 instance HasFrameAssociation TestMessage where
   getFrame (TM n _) = n
 
-instance Ord (TestMessage) where
+instance Ord TestMessage where
   (<=) (TM n _) (TM n' _) = n <= n'
 
 data SFOut = SFOut Integer [TestMessage]
@@ -52,14 +52,13 @@ data SFOut = SFOut Integer [TestMessage]
 
 -- Returns the current frameNr and its input concatenated with previous inputs to enable testing rollbacks
 concatSFWarp :: MSF IO (Natural, (Integer, [TestMessage])) (Integer, [SFOut])
-concatSFWarp = rollbackMSF 3 $ concatSF
+concatSFWarp = rollbackMSF 3 concatSF
 
 concatSF :: Monad m => MSF m (Integer, [TestMessage]) (Integer, [SFOut])
 concatSF = count &&& concatInput
 
 concatInput :: Monad m => MSF m (Integer, [TestMessage]) [SFOut]
-concatInput =
-  feedback [] $ (arr $ \((x, q), p) -> p ++ [SFOut x q]) >>> arr dup
+concatInput = feedback [] $ arr (\((x, q), p) -> p ++ [SFOut x q]) >>> arr dup
 
 -- tests whether stepSF correctly rolls back on new messages for older frames.
 testTimeWarpStep :: Assertion
@@ -174,7 +173,7 @@ instance HasFrameAssociation Integer where
 
 idSFWarp
   :: Monad m => MSF m (Natural, (Char, [Integer])) (Integer, (Char, [Integer]))
-idSFWarp = rollbackMSF 10 $ idSF
+idSFWarp = rollbackMSF 10 idSF
 
 -- sf that just returns the current frameNr/ number of iteration and its input
 idSF :: Monad m => MSF m (a, [msg]) (Integer, (a, [msg]))
@@ -246,7 +245,7 @@ testAddProcessed = do
   let rs3 = addProcessed rs2 2 $ buf (2, ['d'])
 
   DeepEq
-    <$> (toList rs3)
+    <$> toList rs3
     @?= DeepEq
     <$> [pi 0 2 ['b'], pi 2 1 ['a'], pi 2 2 ['d'], pi 3 3 ['c']]
 

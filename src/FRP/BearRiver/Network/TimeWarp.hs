@@ -1,3 +1,5 @@
+{-# LANGUAGE TupleSections #-}
+
 -- | This module provides a variant of the 'reactimate' function that uses Time Warp Synchronisation for use in server applications. 'reactimateTimeWarp' is important here, the rest is just exported for unit tests.
 
 module FRP.BearRiver.Network.TimeWarp
@@ -72,7 +74,7 @@ reactimateTimeWarp senseI sense actuate sf netin netout maxFrames = do
   MSF.reactimateB $ feedback mempty $ proc ((), unprocessed) -> do
     frameNr <- count -< ()
     (dt, input) <- senseSF senseI sense -< ()
-    newMessages <- toMessageBuffer ^<< arrM (\_ -> netin) -< ()
+    newMessages <- toMessageBuffer ^<< arrM (const netin) -< ()
     allUnprocessed <- arr (uncurry (<>)) -< (newMessages, unprocessed)
     (frameMessages, nextMessages) <-
       arr (\(n, xs) -> span ((<= n) . getFrame) xs) -< (frameNr, allUnprocessed)
@@ -109,7 +111,7 @@ timeWarpStep sf maxFrames = MSF $ \((n, (a, qi)), pi) -> do
   ((b, sf'), pi') <- case mT0 of
     Nothing -> do -- qi is empty
       (b, sf') <- unMSF sf (0, (a, []))
-      pi'      <- return $ addProcessed pi n (a, qi)
+      let pi' = addProcessed pi n (a, qi)
       return ((b, sf'), pi')
     Just t0
       | t0 < n -> do
@@ -119,7 +121,7 @@ timeWarpStep sf maxFrames = MSF $ \((n, (a, qi)), pi) -> do
         return (msf, pi')
       | t0 == n -> do-- processInput sf pi n (0, (a, qi)) -- step
         (b, sf') <- unMSF sf (0, (a, toList qi))
-        pi'      <- return $ addProcessed pi n (a, qi)
+        let pi' = addProcessed pi n (a, qi)
         return ((b, sf'), pi')
       | t0 > n -> error "t0 > n, inputs from the future can not be processed"
       | otherwise -> error "should not happen"
@@ -142,7 +144,7 @@ processedAfterRollback
   -> FrameNr
   -> a
   -> MessageBuffer msg
-  -> (MessageBuffer (ProcessedInput a msg))
+  -> MessageBuffer (ProcessedInput a msg)
 processedAfterRollback pi n a qi = do
   let pi' = pi <> singleton (ProcessedInput (n, (a, [])))
   mergeB pi' qi
@@ -190,7 +192,7 @@ senseSF
 senseSF senseI sense = switch' (senseFirst senseI) (senseRest sense)
 
 senseFirst :: (Monad m, Num a1) => m b -> MSF m a2 ((a1, b), Event b)
-senseFirst senseI = constM senseI >>> (arr $ \x -> ((0, x), Event x))
+senseFirst senseI = constM senseI >>> arr (\x -> ((0, x), Event x))
 
 senseRest :: Monad m => (Bool -> m (c, Maybe c')) -> c' -> MSF m a (c, c')
 senseRest sense a = constM (sense True) >>> (arr id *** keepLast a)
@@ -199,11 +201,11 @@ keepLast :: Monad m => a -> MSF m (Maybe a) a
 keepLast a = MSF $ \ma -> let a' = fromMaybe a ma in return (a', keepLast a')
 
 switch' :: Monad m => MSF m a (b, Event c) -> (c -> MSF m a b) -> MSF m a b
-switch' sf' sfC = MSF.switch (sf' >>> second (arr eventToMaybe)) sfC
+switch' sf' = MSF.switch (sf' >>> second (arr eventToMaybe))
 
 -- Consume/render
 actuateSF :: Monad m => (Bool -> a -> m c) -> MSF m a c
-actuateSF actuate = arr (\x -> (True, x)) >>> arrM (uncurry actuate)
+actuateSF actuate = arr (True,) >>> arrM (uncurry actuate)
 
 sfIO :: Monad m => MSF (ReaderT r Identity) a b -> MSF m (r, a) b
 sfIO sf = morphS (return . runIdentity) (runReaderS sf)

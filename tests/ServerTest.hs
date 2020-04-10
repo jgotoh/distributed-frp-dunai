@@ -59,8 +59,7 @@ serverTests = withResource withNode clearNode tests
         _ <- Log.systemLog (P.liftIO . print) (return ()) Log.Debug return
         return ()
       return nt
-  clearNode (n, t) = do
-    Node.closeLocalNode n >> T.closeTransport t
+  clearNode (n, t) = Node.closeLocalNode n >> T.closeTransport t
 
 tests :: IO (Node.LocalNode, T.Transport) -> TestTree
 tests mkNT = testGroup
@@ -239,7 +238,7 @@ testJoinRequests (n, _) = withServer
 
     -- Check server's state
     -- state should be compared for equality independently of its order due to concurrent creation
-    state <- P.liftIO $ getState server >>= return . Set.fromList
+    state <- P.liftIO (Set.fromList <$> getState server)
 
     let expectedClient1 = Client nick1 ssp1
         expectedClient2 = Client nick2 ssp2
@@ -303,7 +302,7 @@ initializeNode ip port = do
 
 testWriteState :: (Node.LocalNode, T.Transport) -> Assertion
 testWriteState (node, _) = Node.runProcess node $ do
-  var     <- P.liftIO $ newEmptyTMVarIO
+  var     <- P.liftIO newEmptyTMVarIO
 
   (sp, _) <-
     P.newChan :: P.Process
@@ -329,7 +328,7 @@ testWriteState (node, _) = Node.runProcess node $ do
 
 testReceiveCommands :: (Node.LocalNode, T.Transport) -> Assertion
 testReceiveCommands (node, _) = Node.runProcess node $ do
-  q <- P.liftIO $ newTQueueIO
+  q <- P.liftIO newTQueueIO
 
   let x1 = 1
       x2 = 2

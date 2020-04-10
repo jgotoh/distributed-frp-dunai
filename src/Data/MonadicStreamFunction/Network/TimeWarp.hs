@@ -28,7 +28,7 @@ selectSF
   -> m (MSF m a b, [MSF m a b])
 selectSF n sf cs
   | n == 0 = return (sf, cs)
-  | n > 0 = case (drop (fromIntegral n) (sf : cs)) of
+  | n > 0 = case drop (fromIntegral n) (sf : cs) of
     sf' : cs' -> return (sf', cs')
     []        -> error $ "sf at index " ++ show n ++ " does not exist"
   | otherwise = error
@@ -49,7 +49,7 @@ toRollbackMSF
   -> MSF m ((Natural, a), [MSF m a b]) (b, [MSF m a b])
 toRollbackMSF maxCs sf = MSF $ \((n, a), cs) -> do
   -- sf':= which sf to apply based on n, cs':= updated conts
-  (sf', cs') <- (selectSF n sf cs)
+  (sf', cs') <- selectSF n sf cs
   -- apply sf', returns b and next continuation
   (b  , c  ) <- unMSF sf' a
   let cs'' = consCap maxCs sf' cs'

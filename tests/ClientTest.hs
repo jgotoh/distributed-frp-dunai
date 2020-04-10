@@ -36,8 +36,7 @@ clientTests = withResource withNode clearNode tests
         _ <- Log.systemLog (P.liftIO . print) (return ()) Log.Debug return
         return ()
       return nt
-  clearNode (n, t) = do
-    Node.closeLocalNode n >> T.closeTransport t
+  clearNode (n, t) = Node.closeLocalNode n >> T.closeTransport t
 
 tests :: IO (Node.LocalNode, T.Transport) -> TestTree
 tests mkNT = testGroup
@@ -70,7 +69,7 @@ testReceiveUpdates (n, _) = withServer
 
     -- test whether connection between client and server was set up correctly
     joinResult <- P.liftIO . atomically $ takeTMVar joinResultVar
-    P.liftIO $ joinResult @?= (JoinRequestResult (Right (JoinAccepted [])))
+    P.liftIO $ joinResult @?= JoinRequestResult (Right (JoinAccepted []))
 
     -- write an UpdatePacket into LocalServer's sendVar
     let readVar' = readVar client
@@ -160,12 +159,12 @@ testTermination (n, _) = Node.runProcess n $ do
   let mkServer =
         startServerProcess (testConfiguration n) :: IO
             (LocalServer TestMessage TestMessage)
-  server                  <- P.liftIO $ mkServer
+  server                  <- P.liftIO mkServer
 
   (client, joinResultVar) <- startTestClient n server "1"
 
   joinResult              <- P.liftIO . atomically $ takeTMVar joinResultVar
-  P.liftIO $ joinResult @?= (JoinRequestResult (Right (JoinAccepted [])))
+  P.liftIO $ joinResult @?= JoinRequestResult (Right (JoinAccepted []))
 
   -- client process still exists
   (Just  _        ) <- P.getProcessInfo (Network.Client.pidClient client)
@@ -186,7 +185,7 @@ testWriteCommand :: (LocalNode, T.Transport) -> IO ()
 testWriteCommand (n, _) = Node.runProcess n $ do
 
   pid <- P.getSelfPid
-  v   <- P.liftIO $ newEmptyTMVarIO
+  v   <- P.liftIO newEmptyTMVarIO
 
   let c1 = CommandPacket pid 1 "c"
 
@@ -201,7 +200,7 @@ testReceiveState :: (LocalNode, T.Transport) -> IO ()
 testReceiveState (n, _) = Node.runProcess n $ do
 
   pid <- P.getSelfPid
-  v   <- P.liftIO $ newEmptyTMVarIO
+  v   <- P.liftIO newEmptyTMVarIO
 
   s0  <- P.liftIO $ receiveState v
 
@@ -231,7 +230,7 @@ startTestClient n server nick = do
 
   let remoteServer = Server sPid
       createChan =
-        (createServerStateChannel :: P.Process (ServerStateChannel TestMessage))
+        createServerStateChannel :: P.Process (ServerStateChannel TestMessage)
 
   P.liftIO $ startClientProcess n remoteServer nick createChan :: P.Process
       ( LocalClient TestMessage TestMessage

@@ -1,7 +1,6 @@
 -- | SFs related to prediction of signals. SFs mapping discrete signals to continuous signals.
 -- Dead Reckoning works by extrapolation of the last defined values.
 
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE FlexibleInstances #-}
 
@@ -39,8 +38,7 @@ drmSecond
   => a -- ^ initial a to extrapolate
   -> (a -> v -> a) -- ^ function to construct new values from a new position
   -> SF m (Maybe a) a
-drmSecond a0 new =
-  drm (integral >>> integral) a0 getAcceleration getPosition new
+drmSecond a0 = drm (integral >>> integral) a0 getAcceleration getPosition
 
 -- | Perform first-order Dead Reckoning by integration of velocity.
 drmFirst
@@ -48,12 +46,12 @@ drmFirst
   => a -- ^ initial a to extrapolate
   -> (a -> v -> a) -- ^ function to construct new values from a new position
   -> SF m (Maybe a) a
-drmFirst a0 new = drm integral a0 getVelocity getPosition new
+drmFirst a0 = drm integral a0 getVelocity getPosition
 
 -- | Perform zeroth-order Dead Reckoning. Holds the last defined value.
 drmZero
   :: (Show v, Monad m, VectorSpace v s, HasPosition a v)
   => a -- ^ initial a to extrapolate
   -> SF m (Maybe a) a
-drmZero a0 = drm (arr id) a0 (\_ -> zeroVector) getPosition (\b _ -> b)
+drmZero a0 = drm (arr id) a0 (const zeroVector) getPosition const
 

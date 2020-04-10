@@ -30,7 +30,7 @@ import           Numeric.Natural
 import           GHC.Exts
 
 -- | A sorted list of messages.
-data MessageBuffer a = MessageBuffer (SL.SortedList a)
+newtype MessageBuffer a = MessageBuffer (SL.SortedList a)
   deriving (Eq, Show)
 
 instance Ord a => IsList (MessageBuffer a) where

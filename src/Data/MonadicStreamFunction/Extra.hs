@@ -20,8 +20,7 @@ dSwitch' :: Monad m => MSF m a (b, Maybe c) -> (c -> MSF m a b) -> MSF m a b
 dSwitch' sf sfC = MSF $ \a -> do
   (o, ct) <- unMSF sf a
   case o of
-    (b, Just c) -> do
-      return (b, sfC c)
+    (b, Just c ) -> return (b, sfC c)
     (b, Nothing) -> return (b, dSwitch' ct sfC)
 
 -- | Replace first input to an MSF.
@@ -32,5 +31,5 @@ replaceOnce' a = dSwitch' (arr $ const (a, Just ())) (const $ arr id)
 -- | Return 'b' on first application, after that the MSF is used to produce new values.
 replaceOnceOut :: Monad m => b -> MSF m a b -> MSF m a b
 replaceOnceOut x sf =
-  dSwitch' (arr (\_ -> x) &&& arr (\_ -> Just ())) (\_ -> sf)
+  dSwitch' (arr (const x) &&& arr (\_ -> Just ())) (const sf)
 
