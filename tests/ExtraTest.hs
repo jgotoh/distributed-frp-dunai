@@ -37,12 +37,12 @@ newtype TestMessage = TM FrameNr
 instance HasFrameAssociation TestMessage where
   getFrame (TM n) = n
 
+-- Tests frameNrSF used to track the current frameNr in clients, which will be updated regularly by a discrete input signal
 testFrameNrSF :: Assertion
 testFrameNrSF = do
 
   let just x = Just $ TM x
 
-  -- frameNrSF :: (HasFrameAssociation netin, Monad m) => FrameNr -> MSF m (Maybe netin) FrameNr
   print "rs0"
   rs0 <- embed (frameNrSF 0) [Nothing :: Maybe TestMessage, Nothing, Nothing]
   rs0 @?= [0, 1, 2]
