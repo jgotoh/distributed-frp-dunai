@@ -27,7 +27,7 @@ import           Control.Monad.Reader           ( lift )
 -- Executed by a client that joins a session. Only displays states received via UpdatePackets. Uses Client Side Prediction and first-order Dead Reckoning.
 remoteClientSF
   :: Monad m
-  => SF (GameEnv m) (GameInput, (Maybe (UpdatePacket NetState))) GameState
+  => SF (GameEnv m) (GameInput, Maybe (UpdatePacket NetState)) GameState
 remoteClientSF = feedbackM act pureRemoteLoopingGame
  where
   act = do
@@ -46,7 +46,7 @@ dynamicRemoteClientSF
   -> DRMConfig
   -> SF
        (GameEnv m)
-       (GameInput, (Maybe (UpdatePacket NetState)))
+       (GameInput, Maybe (UpdatePacket NetState))
        GameState
 dynamicRemoteClientSF csp drm' = feedbackM act $ getRemoteLoopingSF csp drm'
  where
@@ -63,13 +63,13 @@ pureRemoteLoopingGame
   :: Monad m
   => SF
        (GameEnv m)
-       ((GameInput, (Maybe (UpdatePacket NetState))), GameState)
+       ((GameInput, Maybe (UpdatePacket NetState)), GameState)
        (GameState, GameState)
 pureRemoteLoopingGame =
   (arr fst >>> morphS (selectEnv localPlayerSettings) localRemotePlayerSFCSP)
     &&& (arr su >>> morphS (selectEnv remotePlayerSettings) remotePlayerSF)
     &&& (arr su >>> morphS (selectEnv ballSettings) remoteBallSF)
-    &&& (arr shouldQuit)
+    &&& arr shouldQuit
     >>> arr (\(ps, (ps', (bs, q))) -> (((ps, ps'), bs), q))
     >>> arr ((uncurry . uncurry . uncurry) GameState)
     >>> arr dup
@@ -83,37 +83,36 @@ getRemoteLoopingSF
   -> DRMConfig
   -> SF
        (GameEnv m)
-       ((GameInput, (Maybe (UpdatePacket NetState))), GameState)
+       ((GameInput, Maybe (UpdatePacket NetState)), GameState)
        (GameState, GameState)
 getRemoteLoopingSF csp drm' =
   getPlayerSF
     &&& getRemotePlayerSF
     &&& getRemoteBallSF
-    &&& (arr shouldQuit)
+    &&& arr shouldQuit
     >>> arr (\(ps, (ps', (bs, q))) -> (((ps, ps'), bs), q))
     >>> arr ((uncurry . uncurry . uncurry) GameState)
     >>> arr dup
  where
   su = snd . fst
   getPlayerSF =
-    (arr fst >>> morphS
+    arr fst >>> morphS
       (selectEnv localPlayerSettings)
       (if csp then localRemotePlayerSFCSP else localRemotePlayerSF)
-    )
   getRemotePlayerSF =
-    (arr su >>> morphS (selectEnv remotePlayerSettings) decideRemotePlayer)
+    arr su >>> morphS (selectEnv remotePlayerSettings) decideRemotePlayer
   decideRemotePlayer = case drm' of
     DRMZero  -> remotePlayerSF0
     DRMFirst -> remotePlayerSF
   getRemoteBallSF =
-    (arr su >>> morphS (selectEnv ballSettings) decideRemoteBall)
+    arr su >>> morphS (selectEnv ballSettings) decideRemoteBall
   decideRemoteBall = case drm' of
     DRMZero  -> remoteBallSF0
     DRMFirst -> remoteBallSF
 
 -- returns true, if NetState.gameOverNetState returns true
 shouldQuit :: ((GameInput, Maybe (UpdatePacket NetState)), GameState) -> Bool
-shouldQuit tuple = maybe False id (isQuit <$> (snd $ fst tuple))
+shouldQuit tuple = maybe False isQuit (snd (fst tuple))
   where isQuit = gameOverNetState . updatePacketData
 
 selectEnv
@@ -142,12 +141,12 @@ localRemotePlayerSFCSP =
  where
   newPos ps pset = pset
     { playerPosition0   = playerPositionState ps
-    , playerVelocityMax = (playerVelocityMax pset) SDL.Vect.^/ 2
+    , playerVelocityMax = playerVelocityMax pset SDL.Vect.^/ 2
     }
 
 -- remote player: first-order DRM
 remotePlayerSF
-  :: (Monad m) => SF (PlayerEnv m) ((Maybe (UpdatePacket NetState))) PlayerState
+  :: (Monad m) => SF (PlayerEnv m) (Maybe (UpdatePacket NetState)) PlayerState
 remotePlayerSF =
   arr (fmap (remotePlayerNetState . updatePacketData)) >>> drmFirst state0 new
  where
@@ -156,14 +155,14 @@ remotePlayerSF =
 
 -- remote player: zero-order DRM
 remotePlayerSF0
-  :: (Monad m) => SF (PlayerEnv m) ((Maybe (UpdatePacket NetState))) PlayerState
+  :: (Monad m) => SF (PlayerEnv m) (Maybe (UpdatePacket NetState)) PlayerState
 remotePlayerSF0 = arr (fmap (remotePlayerNetState . updatePacketData))
   >>> drmZero state0
   where state0 = PlayerState zeroVector zeroVector zeroVector white
 
 -- ball: first-order DRM
 remoteBallSF
-  :: Monad m => SF (BallEnv m) ((Maybe (UpdatePacket NetState))) BallState
+  :: Monad m => SF (BallEnv m) (Maybe (UpdatePacket NetState)) BallState
 remoteBallSF =
   arr (fmap (ballNetState . updatePacketData)) >>> drmFirst state0 new
  where
@@ -172,7 +171,7 @@ remoteBallSF =
 
 -- ball: zero-order DRM
 remoteBallSF0
-  :: Monad m => SF (BallEnv m) ((Maybe (UpdatePacket NetState))) BallState
+  :: Monad m => SF (BallEnv m) (Maybe (UpdatePacket NetState)) BallState
 remoteBallSF0 = arr (fmap (ballNetState . updatePacketData)) >>> drmZero state0
   where state0 = BallState zeroVector 50 zeroVector white
 

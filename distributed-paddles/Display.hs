@@ -35,7 +35,7 @@ createWindow title width height = do
 setWindowTitle :: SDL.Window -> String -> IO ()
 setWindowTitle w s = do
   let title = SDL.windowTitle w
-  title SDL.$= (pack s)
+  title SDL.$= pack s
 
 createRenderer :: SDL.Window -> IO SDL.Renderer
 createRenderer window = do

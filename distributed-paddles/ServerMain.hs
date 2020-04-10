@@ -92,7 +92,7 @@ serverMain ip p n roundLength useTimeWarp = do
   SDL.initialize [SDL.InitTimer]
 
   print "waiting for clients to join"
-  [clientA, clientB] <- waitUntilState s (\s' -> (length s') == 2)
+  [clientA, clientB] <- waitUntilState s (\s' -> length s' == 2)
 
   print "two clients have joined"
   let portA = serverStateSendPort $ serverStateClient clientA
@@ -115,21 +115,21 @@ serverMain ip p n roundLength useTimeWarp = do
       (actuate frameNrRef)
       (runGameReader (gameSettings roundLength) (serverSF pids))
       (receiveCommand rQ) -- get CommandPackets
-      (\gs -> writeState sQ $ createNetStates portA portB api gs)
+      (writeState sQ . createNetStates portA portB api)
     else reactimateTimeWarp
       (return (GameInput Nothing))
       (sense timeRef)
       (actuate frameNrRef)
       (runGameReader (gameSettings roundLength) (serverSFWarp pids frames))
       (receiveCommands rQ)
-      (\gs -> writeState sQ $ createNetStatesWithFrame portA portB api gs)
+      (writeState sQ . createNetStatesWithFrame portA portB api)
       frames
 
   dtTime         <- senseTime startTime
   numberOfFrames <- readIORef frameNrRef
 
   let dtMs = dtTime
-      fps  = (fromIntegral numberOfFrames) / dtMs
+      fps  = fromIntegral numberOfFrames / dtMs
 
   print $ "FPS: " ++ show fps
 
@@ -161,7 +161,7 @@ createNetStatesWithFrame
   -> P.ProcessId
   -> (FrameNr, GameState)
   -> [(P.SendPort (UpdatePacket NetState), UpdatePacket NetState)]
-createNetStatesWithFrame !portA !portB server !(nr, gs) = (fmap . fmap)
+createNetStatesWithFrame !portA !portB server (nr, gs) = (fmap . fmap)
   (UpdatePacket server nr)
   [playerA, playerB]
  where

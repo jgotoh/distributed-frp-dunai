@@ -42,7 +42,7 @@ clientMain ip port nick session addr csp drm = do
 
   print "Found Server"
 
-  ((LocalClient pid rQ sQ), joinResult) <-
+  (LocalClient pid rQ sQ, joinResult) <-
     (startClientProcess
       node
       server
@@ -79,7 +79,7 @@ clientMain ip port nick session addr csp drm = do
   frames <- readIORef frameNrRef
 
   let dtMs = dtTime
-      fps  = (fromIntegral frames) / dtMs
+      fps  = fromIntegral frames / dtMs
 
   print $ "FPS: " ++ show fps
 

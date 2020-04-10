@@ -28,16 +28,16 @@ fixedTimeStep step timeRef = do
   let dtSecs = (fromIntegral newTime - previousTime) / fromIntegral freq
 
   -- last frame took dtSecs to compute
-  let block  = truncate ((millisToMicros (step)) - (secondsToMicros dtSecs))
+  let block  = truncate (millisToMicros step - secondsToMicros dtSecs)
 
   -- blocking time is < 0 if the last frame took too long to compute
   -- we now have to block until the next frame
   -- see Jason Gregory, Game Engine Architecture, 2nd. Edition, p.351: Governing the Frame Rate
   if block < 0
-    then do
+    then
       return () -- block until next frame is missing here
-    else do
-      threadDelay $ block
+    else
+      threadDelay block
 
   -- new dtSecs after threadDelay
   newTime' <- SDL.getPerformanceCounter

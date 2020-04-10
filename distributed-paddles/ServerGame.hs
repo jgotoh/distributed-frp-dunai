@@ -77,7 +77,7 @@ loopingGame
   => Map.Map ObjectType P.ProcessId
   -> SF
        (GameEnv m)
-       ((GameInput, ([CommandPacket Command])), GameState)
+       ((GameInput, [CommandPacket Command]), GameState)
        (GameState, GameState)
 loopingGame pids =
   (   arr (snd . fst)
@@ -131,12 +131,11 @@ paddleSF = proc dir -> do
 ballSF :: (Monad m) => SF (GameEnv m) GameState BallState
 ballSF = switch
   (   arr id
-  &&& (morphS
+  &&& morphS
         (selectEnv ballSettings)
         (   resolveCollisions
         >>> feedbackM (lift $ asks ballDirection0) movingBallSF
         )
-      )
   >>> arr snd
   &&& checkScore
   )
@@ -149,7 +148,7 @@ newVelocity x gs = gs
  where
   bs   = ballSettings gs
   dir' = snd x
-  vel' = (ballVelocityMax bs) * 1.01
+  vel' = ballVelocityMax bs * 1.01
 
 movingBallSF
   :: Monad m
@@ -173,7 +172,7 @@ checkScore = proc (gs,bs) -> do
   remoteX <- constM (lift $ asks $ playerX remotePlayerSettings) -< ()
   ballX   <-
     arr
-        ( (\p -> case p of
+        ( (\case
             V2 x _ -> x
           )
         . ballPositionState
@@ -183,7 +182,7 @@ checkScore = proc (gs,bs) -> do
   returnA -< newDir gs <$> ev
  where
   playerX player =
-    (\p -> case p of
+    (\case
         V2 x _ -> x
       )
       . playerPosition0
@@ -220,7 +219,7 @@ resolveCollisions =
     &&& (arr localPlayerState &&& arr ballState >>> playerCollisionSF)
     &&& (arr remotePlayerState &&& arr ballState >>> playerCollisionSF)
     >>> second (arr $ uncurry (++))
-    >>> (arr $ uncurry (++))
+    >>> arr (uncurry (++))
 
 boundsCollisionSF :: Monad m => SF (BallEnv m) BallState [Event Collision]
 boundsCollisionSF =
