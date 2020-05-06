@@ -79,7 +79,11 @@ startClientProcess node server nick sChanP = do
             P.liftIO $ print $ "join successful: " ++ show acc
             clientProcess node server rp rVar sVar
     )
-    (\e -> P.liftIO $ print $ show (e :: SomeException))
+    (\e -> do
+        P.liftIO $ print "client exception"
+        P.liftIO $ print $ show (e :: SomeException)
+        throwM e
+    )
   return (LocalClient pid rVar sVar, joinResultVar)
 
 clientProcess

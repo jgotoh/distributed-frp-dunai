@@ -108,7 +108,7 @@ startServerProcess cfg = do
 
       mainPid <- P.getSelfPid
 
-      -- There should be a better way to compose function that modify a processDefinition.
+      -- There should be a better way to compose functions that modify a processDefinition.
       let
         def =
           addApiHandler
@@ -121,8 +121,6 @@ startServerProcess cfg = do
             addApiHandler (MP.handleCast $ handleCommandPacket rQueue) def'
 
       pid      <- P.spawnLocal $ apiProcess def'' state0
-
-      -- let server = LocalServer mainPid started sendVar rQueue stateV
 
       -- spawns processes that send individual StateUpdates
       updaters <- (fmap . fmap . fmap) fst spawnUpdateProcesses 2
