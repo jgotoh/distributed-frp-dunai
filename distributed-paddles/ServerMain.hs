@@ -76,7 +76,7 @@ gameSettings roundLength = GameSettings psA psB bs (fromIntegral roundLength)
   psB = PlayerSettings (SDL.V2 450 100) (SDL.V2 10 50) (SDL.V2 0 225) white
   bs  = BallSettings (SDL.V2 250 175)
                      4
-                     (SDL.V2 350 350)
+                     (SDL.V2 250 250)
                      (SDL.V4 255 255 0 255)
                      (SDL.V2 (-0.75) $ -0.12)
 

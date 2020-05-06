@@ -141,7 +141,6 @@ localRemotePlayerSFCSP =
  where
   newPos ps pset = pset
     { playerPosition0   = playerPositionState ps
-    , playerVelocityMax = playerVelocityMax pset SDL.Vect.^/ 2
     }
 
 -- remote player: first-order DRM
