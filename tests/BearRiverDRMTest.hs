@@ -19,7 +19,10 @@ bearRiverDRMTests = tests
 tests :: TestTree
 tests = testGroup
   "BearRiverDRMTests"
-  [testCase "test drmZero" testDRMZero, testCase "test drmFirst" testDRMFirst]
+  [ testCase "test drmZero"   testDRMZero
+  , testCase "test drmFirst"  testDRMFirst
+  , testCase "test drmSecond" testDRMSecond
+  ]
 
 type Position = Vector2 Double
 type Velocity = Vector2 Double
@@ -50,7 +53,7 @@ dt = (,)
 testDRMZero :: Assertion
 testDRMZero = do
 
-  let a0 = A (v2 1 1) (v2 10 10) (v2 100 100)
+  let a0 = A (v2 1 1) (v2 10 10) (v2 5 5)
       test input = embedSF (drmZero a0) input
       rA pos = a0 { posA = pos }
 
@@ -99,6 +102,7 @@ testDRMZero = do
   rs8 <- test in8
   rs8 @?= [a0, rA (v2 20 20), rA (v2 20 20), rA (v2 20 20), rA (v2 30 30)]
 
+-- test first-order Dead Reckoning
 testDRMFirst :: Assertion
 testDRMFirst = do
 
@@ -125,16 +129,18 @@ testDRMFirst = do
   rs3 <- test in3
   rs3 @?= [a0, rA (v2 20 20)]
 
-  -- if a Just value comes with a dt of > 0, it must not be extrapolated
+  -- if a Just value comes with a dt of > 0, it must not be extrapolated, to represent the value told by the server as it is
   let in4 = [dt 0 Nothing, dt 10 (Just (rA (v2 20 20)))]
   rs4 <- test in4
   rs4 @?= [a0, rA (v2 20 20)]
 
+  -- same as before
   let in5 =
         [dt 0 Nothing, dt 10 (Just (rA (v2 20 20))), dt 10 (Just (rA (v2 5 5)))]
   rs5 <- test in5
   rs5 @?= [a0, rA (v2 20 20), rA (v2 5 5)]
 
+  -- dt 2 Nothing leads to extrapolation
   let in6 = [dt 0 Nothing, dt 7 (Just (rA (v2 20 20))), dt 2 Nothing]
   rs6 <- test in6
   rs6 @?= [a0, rA (v2 20 20), rA (v2 40 40)]
@@ -168,3 +174,75 @@ testDRMFirst = do
   rs9 <- test in9
   rs9 @?= [rA (v2 20 20), rA (v2 60 60), rAv0 (v2 100 100), rAv0 (v2 100 100)]
 
+
+-- test second-order Dead Reckoning
+testDRMSecond :: Assertion
+testDRMSecond = do
+
+  let a0 = A (v2 1 1) (v2 0 0) (v2 5 5)
+      test input = embedSF (drmSecond a0 newA) input
+      rA pos = a0 { posA = pos }
+
+  -- apply to Nothing, return a0
+  let in0 = [dt 0 Nothing]
+  rs0 <- test in0
+  rs0 @?= pure a0
+
+  -- dt > 0, so interpolate a0
+  let in1 = [dt 1 Nothing]
+  rs1 <- test in1
+  rs1 @?= [rA (v2 6 6)]
+
+  -- interpolate a0 twice
+  let in2 = [dt 1 Nothing, dt 0.5 Nothing]
+  rs2 <- test in2
+  rs2 @?= [rA (v2 6 6), rA (v2 9.75 9.75)]
+
+  let in3 = [dt 0 Nothing, dt 0 (Just (rA (v2 20 20)))]
+  rs3 <- test in3
+  rs3 @?= [a0, rA (v2 20 20)]
+
+  -- if a Just value comes with a dt of > 0, it must not be extrapolated
+  let in4 = [dt 0 Nothing, dt 10 (Just (rA (v2 20 20)))]
+  rs4 <- test in4
+  rs4 @?= [a0, rA (v2 20 20)]
+
+  -- same as before
+  let in5 =
+        [dt 0 Nothing, dt 10 (Just (rA (v2 20 20))), dt 10 (Just (rA (v2 5 5)))]
+  rs5 <- test in5
+  rs5 @?= [a0, rA (v2 20 20), rA (v2 5 5)]
+
+  -- dt 2 Nothing leads to extrapolation
+  let in6 = [dt 0 Nothing, dt 7 (Just (rA (v2 20 20))), dt 2 Nothing]
+  rs6 <- test in6
+  rs6 @?= [a0, rA (v2 20 20), rA (v2 40 40)]
+
+  let in7 =
+        [dt 0 Nothing, dt 10 (Just (rA (v2 20 20))), dt 2 Nothing, dt 1 Nothing]
+  rs7 <- test in7
+  rs7 @?= [a0, rA (v2 20 20), rA (v2 40 40), rA (v2 55 55)]
+
+  let in8 =
+        [ dt 0  Nothing
+        , dt 10 (Just (rA (v2 20 20)))
+        , dt 2  Nothing
+        , dt 1  Nothing
+        , dt 1  (Just (rA (v2 20 20)))
+        ]
+  rs8 <- test in8
+  rs8 @?= [a0, rA (v2 20 20), rA (v2 40 40), rA (v2 55 55), rA (v2 20 20)]
+
+  -- extrapolate function must not have internal state
+  -- e.g when extrapolating A with acceleration > 0
+  -- then extrapolating A with acceleration = 0, should yield the same position (done here with rAv0)
+
+  let rAv0 pos = a0 { posA = pos, accA = v2 0 0 }
+  let in9 =
+        [ dt 1  (Just (rA (v2 20 20)))
+        , dt 4  Nothing
+        , dt 1  (Just (rAv0 (v2 100 100)))
+        , dt 10 Nothing
+        ]
+  rs9 <- test in9
+  rs9 @?= [rA (v2 20 20), rA (v2 100 100), rAv0 (v2 100 100), rAv0 (v2 100 100)]

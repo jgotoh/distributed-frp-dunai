@@ -31,6 +31,7 @@ tests = testGroup
   , testCase "embed rollbackMSF count"        testRollbackMSFCount
   ]
 
+-- this function verifies bouncingBall, which will be used in later tests.
 testBouncingBall :: Assertion
 testBouncingBall = do
   -- a ball that bounces between 1 and 3
@@ -38,6 +39,7 @@ testBouncingBall = do
   ys @?= [1, 2, 3, 3, 2, 1, 1, 2, 3, 3]
   print ys
 
+-- tests whether consCap is bounded cons operation, which never exceeds the maximum specified length of the list.
 testConsCap :: Assertion
 testConsCap = do
   consCap 0 1 [] @?= []
@@ -46,6 +48,8 @@ testConsCap = do
   consCap 2 3 [2, 4] @?= [3, 2]
   consCap 5 1 [2, 3, 4, 5, 6] @?= [1, 2, 3, 4, 5]
 
+-- tests selectSF. selectSF selects either its second argument if n==0, else the n'th element of the list passed as third argument.
+-- If the n'th argument is selected, newer elements should be discarded.
 testSelectSF :: Assertion
 testSelectSF = do
   (sf0, [sf0']) <- selectSF 0 (arr $ \() -> 10) [arr $ \() -> 11]
@@ -120,9 +124,11 @@ testRollbackMSFCount = do
   let sf = rollbackMSF 10 count :: MSF IO (Natural, ()) Integer
       sfInput x = (x, ())
 
+  -- never roll back
   rs0 <- embed sf $ replicate 5 $ sfInput 0
   rs0 @?= [1 .. 5]
 
+  -- advance twice, then roll back two states
   rs1 <- embed sf [sfInput 0, sfInput 0, sfInput 2]
   rs1 @?= [1, 2, 1]
 
