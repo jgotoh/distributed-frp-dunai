@@ -37,6 +37,7 @@ selectSF n sf cs
 -- | Convert to an 'MSF' that saves its last 'n' continuations and is able to revert its state to a previous continuation. Selection is based on arrow input.
 -- When passing 'x=0' as input, the sf will use its standard continuation.
 -- Warping is irreversible. To catch up to future iterations, values have to be recalculated, because input could have changed.
+-- Note that it does not need to be manually called when using reactimateTimeWarp.
 rollbackMSF :: Monad m => Natural -> MSF m a b -> MSF m (Natural, a) b
 rollbackMSF n sf = feedback [] $ toRollbackMSF n sf
 

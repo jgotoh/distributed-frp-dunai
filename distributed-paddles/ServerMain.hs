@@ -120,7 +120,7 @@ serverMain ip p n roundLength useTimeWarp = do
       (return (GameInput Nothing))
       (sense timeRef)
       (actuate frameNrRef)
-      (runGameReader (gameSettings roundLength) (serverSFWarp pids frames))
+      (runGameReader (gameSettings roundLength) (serverSF pids))
       (receiveCommands rQ)
       (writeState sQ . createNetStatesWithFrame portA portB api)
       frames

@@ -4,7 +4,6 @@
 module ServerGame
   ( ObjectType(..)
   , serverSF
-  , serverSFWarp
   , paddleSF
   )
 where
@@ -15,7 +14,6 @@ import           Types
 import           Data.Maybe
 import qualified Data.Map.Strict               as Map
 import           Data.Map.Strict                ( (!) )
-import           Data.MonadicStreamFunction.Network.TimeWarp
 import           Data.MonadicStreamFunction.Extra
 import           Control.Monad.Trans.MSF.Reader
 import           Network.Common
@@ -52,25 +50,6 @@ checkTime = arr id &&& check >>> arr (\(gs, q) -> gs { gameOver = q })
  where
   check =
     constM (lift $ asks maximumGameLength) &&& time >>> arr (uncurry (<=))
-
-serverSFWarp
-  :: Monad m
-  => Map.Map ObjectType P.ProcessId
-  -> Natural
-  -> SF
-       (GameEnv m)
-       (Natural, (GameInput, [CommandPacket Command]))
-       GameState
-serverSFWarp pids frames =
-  rollbackMSF frames $ feedbackM act (loopingGame pids) >>> checkTime
- where
-  act = do
-    gs <- lift ask
-    return (toState gs)
-  toState gs = GameState (ps0 gs) (rps0 gs) (bs0 gs) False
-  ps0  = toPlayerState . localPlayerSettings
-  bs0  = toBallState . ballSettings
-  rps0 = toPlayerState . remotePlayerSettings
 
 loopingGame
   :: (Monad m)

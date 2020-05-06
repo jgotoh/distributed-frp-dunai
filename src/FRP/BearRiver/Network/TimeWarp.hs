@@ -26,6 +26,7 @@ import           Control.Monad.Trans.MSF hiding ( step )
 import           Data.Functor.Identity
 import           Data.Maybe
 import           Data.MessageBuffer
+import           Data.MonadicStreamFunction.Network.TimeWarp
 import           Data.Monoid
 import           Numeric.Natural
 import           FRP.BearRiver
@@ -55,22 +56,24 @@ instance HasFrameAssociation (ProcessedInput a msg) where
 -- 'senseI' is an initial sense action at time = 0
 -- 'sense', gather input, calculate 'DTime'
 -- 'actuate' output, render
--- 'sf' actual FRP. Will rollback, if a message for an earlier Frame arrives
+-- 'sf' actual FRP. Will automatically rollback, if a message for an earlier frame arrives.
 -- 'netin' action to receive commands
 -- 'netout' action to send states
 -- 'maxFrames' maximum number of frames that is saved for rollback
 -- To detect, whether a message for an earlier frame arrives, network input 'nin' needs to be an instance of 'HasFrameAssociation'. 'Ord' instance is necessary to sort messages by 'FrameNr'.
+-- Note that rollbackMSF will be used in reactimateTimeWarp to transform 'sf'. So there is no need to manually transform it.
 reactimateTimeWarp
   :: (Show a, Show nin, Monad m, HasFrameAssociation nin, Ord nin)
   => m a                                 -- ^ first sense
   -> (Bool -> m (DTime, Maybe a))        -- ^ sense
   -> (Bool -> b -> m Bool)               -- ^ actuate
-  -> SF Identity (FrameNr, (a, [nin])) b -- ^ sf
+  -> SF Identity (a, [nin]) b -- ^ sf
   -> m [nin]                             -- ^ receive
   -> ((FrameNr, b) -> m any)             -- ^ send
   -> Natural                             -- ^ maximum number of frames to rollback
   -> m ()
-reactimateTimeWarp senseI sense actuate sf netin netout maxFrames = do
+reactimateTimeWarp senseI sense actuate sf' netin netout maxFrames = do
+  let sf = rollbackMSF maxFrames sf'
   MSF.reactimateB $ feedback mempty $ proc ((), unprocessed) -> do
     frameNr <- count -< ()
     (dt, input) <- senseSF senseI sense -< ()
