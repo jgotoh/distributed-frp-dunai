@@ -2,6 +2,19 @@
 
 This library provides a client/ server infrastructure by using [Cloud Haskell](https://haskell-distributed.github.io/) for distributed FRP applications implemented with [Dunai/ BearRiver](https://github.com/ivanperez-keera/dunai).
 
+Its features are demonstrated in an exemplary application called `distributed-paddles`.
+`distributed-paddles` needs [SDL2](https://www.libsdl.org/download-2.0.php)(package [libsdl2-dev](https://packages.ubuntu.com/bionic/libdevel/libsdl2-dev) in Ubuntu, [SDL2-devel](https://pkgs.org/download/SDL2-devel) in rpm) and [SDL2_gfx](http://www.ferzkopp.net/wordpress/2016/01/02/sdl_gfx-sdl2_gfx/)(package [libsdl2-gfx-dev](https://packages.ubuntu.com/bionic/libdevel/libsdl2-gfx-dev) in Ubuntu, [SDL2_gfx-devel](https://pkgs.org/download/SDL2_gfx-devel) in rpm) installed on the system.
+
+Install them with your favorite package manager, e.g `apt install libsdl2-dev; apt install libsdl2-gfx-dev`.
+
+To build/install the project with cabal `--allow-newer` needs to be used:
+
+`cabal build --allow-newer`
+
+`cabal install --allow-newer`
+
+Installation and build process was tested with Cabal 3.2.0.0, GHC 8.2.2 and GHC 8.8.3.
+
 Modules of the client/server architecture:
 
 - `Network.Server` exports functions necessary to create a server application. Servers generate state (which will be sent to clients) and are the central authority of an application in this project. They process commands received by clients.
@@ -22,8 +35,6 @@ For example usage of the modules, see `distributed-paddles` and the unit tests.
 ## distributed-paddles
 
 `distributed-paddles` is an example application inspired by PONG&trade; (Atari Interactive, Inc., 1972).
-
-The application needs [SDL2](https://www.libsdl.org/download-2.0.php) and [SDL2-gfx](http://www.ferzkopp.net/wordpress/2016/01/02/sdl_gfx-sdl2_gfx/) installed on the system.
 
 Command line arguments are used to decide whether to host a session as a
 server or join a session as a client. In addition, command line arguments should
@@ -72,8 +83,9 @@ To exit the session, press again any key.
 ### Profiling
 
 To automatically run a server with two hosts that join using profiling, run `run_profiling`.
-
-See comments in the file to actually get it to run.
+Running a profiled program called x always writes its output to x.prof/ x.hp.
+The workaround used here is to execute different copies of the executable.
+See comments in the file to get the script to work correctly.
 
 ## Formatting
 
@@ -82,3 +94,7 @@ All Haskell source files are formatted via [Brittany](https://github.com/lspitzn
 ## network-transport-tcp
 
 The library uses a modified version of the package `network-transport-tcp` with an updated dependency to the `network` package to version 3.
+
+## distributed-process
+
+A fork of `distributed-process` is used to get compatibility with GHC 8.8.

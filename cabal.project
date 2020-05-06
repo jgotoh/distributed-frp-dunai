@@ -7,6 +7,6 @@ source-repository-package
 
 source-repository-package
     type: git
-    location: https://github.com/haskell-distributed/distributed-process.git
-    tag: 660d554f6acd2dba8b605c84e8fa69e45708bc14
+    location: https://github.com/jgotoh/distributed-process.git
+    tag: a9c60a8b0d6bafb496a489ec9f3239444adeeadc
 
