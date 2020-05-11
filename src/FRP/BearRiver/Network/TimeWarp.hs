@@ -12,6 +12,7 @@ module FRP.BearRiver.Network.TimeWarp
   , processInputs'
   , processedAfterRollback
   , ProcessedInput(..)
+  , rollbackSF
   )
 where
 import           Prelude                 hiding ( takeWhile
@@ -37,6 +38,14 @@ import           Control.Monad.Trans.MSF.Except
 import           Data.MonadicStreamFunction.InternalCore
                                                 ( MSF(..) )
 
+-- | Convert to a 'SF' that saves its last 'n' continuations and is able to revert its state to a previous continuation. Selection is based on arrow input.
+-- When passing 'x=0' as input, the sf will use its standard continuation.
+-- Warping is irreversible. To catch up to future iterations, values have to be recalculated, because input could have changed.
+-- This function does not allow side effectful SFs.
+-- Note that it does not need to be manually called. When using reactimateTimeWarp, every SF is transformed by it.
+rollbackSF :: Natural -> SF Identity a b -> SF Identity (Natural, a) b
+rollbackSF = rollbackMSF
+
 -- | Used in TimeWarp synchronisation to save processed sf inputs.
 newtype ProcessedInput a msg = ProcessedInput (FrameNr, (a, [msg]))
   deriving Show
@@ -61,19 +70,19 @@ instance HasFrameAssociation (ProcessedInput a msg) where
 -- 'netout' action to send states
 -- 'maxFrames' maximum number of frames that is saved for rollback
 -- To detect, whether a message for an earlier frame arrives, network input 'nin' needs to be an instance of 'HasFrameAssociation'. 'Ord' instance is necessary to sort messages by 'FrameNr'.
--- Note that rollbackMSF will be used in reactimateTimeWarp to transform 'sf'. So there is no need to manually transform it.
+-- Note that rollbackSF will be used in reactimateTimeWarp to transform 'sf'. So there is no need to manually transform it.
 reactimateTimeWarp
   :: (Show a, Show nin, Monad m, HasFrameAssociation nin, Ord nin)
   => m a                                 -- ^ first sense
   -> (Bool -> m (DTime, Maybe a))        -- ^ sense
   -> (Bool -> b -> m Bool)               -- ^ actuate
-  -> SF Identity (a, [nin]) b -- ^ sf
+  -> SF Identity (a, [nin]) b            -- ^ sf
   -> m [nin]                             -- ^ receive
   -> ((FrameNr, b) -> m any)             -- ^ send
   -> Natural                             -- ^ maximum number of frames to rollback
   -> m ()
 reactimateTimeWarp senseI sense actuate sf' netin netout maxFrames = do
-  let sf = rollbackMSF maxFrames sf'
+  let sf = rollbackSF maxFrames sf'
   MSF.reactimateB $ feedback mempty $ proc ((), unprocessed) -> do
     frameNr <- count -< ()
     (dt, input) <- senseSF senseI sense -< ()
